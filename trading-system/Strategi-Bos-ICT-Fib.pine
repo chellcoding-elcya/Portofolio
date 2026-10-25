@@ -1,0 +1,354 @@
+//@version=5
+// =====================================================================================
+//  STRATEGI BOS — ICT + SMC + FIBONACCI KUSTOM (EUR/USD)
+//  Versi Pine Script untuk VERIFIKASI VISUAL di TradingView.
+//  Aturan di script ini adalah port PERSIS dari mesin uji utama (Python,
+//  engine_user.py) yang menjalankan terjemahan mekanis strategi Bos yang
+//  disetujui 23 Okt 2026 pukul 16:19 WIB. Tujuannya: Bos bisa menjalankan
+//  Strategy Tester di chart-nya sendiri dan MELIHAT setup yang diambil
+//  mesin (garis E1/E2/SL/TP tergambar di chart), lalu membandingkannya
+//  dengan gambar tangan Bos sendiri.
+//
+//  PETA ATURAN -> KODE:
+//  1. Bias H1 dari struktur pivot (HH+HL = bullish, LH+LL = bearish)
+//     -> fungsi f_biasH1() lewat request.security "60", lookahead_off,
+//        hanya pivot yang SUDAH terkonfirmasi (pivot 5/5). Nilai bias
+//        dibaca sekali di awal jam baru dari bar H1 yang sudah tutup.
+//  2. Swing M15 = pivot 5 kiri / 5 kanan (ta.pivothigh / ta.pivotlow).
+//     Pivot baru boleh dipakai setelah 5 candle kanannya tutup — sama
+//     seperti Python, mesin tidak mengintip masa depan.
+//  3. MSS M15: close menembus swing terkonfirmasi terakhir searah bias,
+//     harus penembusan SEGAR (close bar sebelumnya belum di balik level
+//     itu), atau swing itu baru terkonfirmasi pada bar ini juga.
+//  4. Leg impuls: ujung tetap (legFixed) = ekstrem tertinggi/terendah
+//     sejak bar pivot yang ter-break s/d bar pemicu; ujung berjalan
+//     (runExtreme) mengikuti low/high baru. Leg BEKU (freeze) saat
+//     retrace >= 20% panjang leg berjalan, atau saat pivot searah baru
+//     terkonfirmasi — mana yang lebih dulu.
+//  5. Dua limit per setup, aktif mulai bar SETELAH freeze:
+//       SELL: Entry 1 di Fib 0.655 -> TP di level 0 ; Entry 2 di 0.69
+//             -> TP di level -0.4 ; SL bersama di 0.85.
+//       BUY : cermin penuh (0.345 / 0.31 / SL 0.15 / TP 1.0 / TP 1.4
+//             dalam rumus price(f) = legLow + f x (legHigh - legLow)).
+//     ID order: "E1" dan "E2", masing-masing dengan strategy.exit sendiri.
+//  6. Aturan hangus (dari Bos): sebelum ada fill apa pun, harga mencapai
+//     level TP1 lebih dulu -> SEMUA limit dibatalkan. Begitu satu posisi
+//     tertutup (TP/SL) -> limit sisanya dibatalkan. Bias H1 berbalik
+//     melawan setup -> limit menggantung dibatalkan (fase leg yang
+//     sedang membentuk ikut batal; posisi terbuka tetap jalan).
+//  7. Satu setup aktif dalam satu waktu. Maks 2 posisi (dari setup yang
+//     sama) -> pyramiding = 2.
+//  8. Varian B (wajib FVG) = toggle input "Wajib FVG" (default MATI =
+//     Varian A, Fib murni). FVG dihitung dari jendela leg (bar pivot
+//     yang ter-break s/d bar freeze), zonanya harus tumpang tindih pita
+//     harga entry dan belum termitigasi — persis definisi Python.
+//
+//  PENDEKATAN BIAYA (jujur): uji utama memakai biaya flat 1,8 pip per
+//  posisi round-turn (spread 1,2 pip + slippage 0,3 pip/sisi). Di sini
+//  biaya itu didekati sebagai KOMISI persen 0,0083% yang dikenakan pada
+//  SETIAP eksekusi (masuk dan keluar), jadi totalnya 0,0166% dari nilai
+//  posisi ~= 1,8 pip per posisi pada harga EUR/USD +/-1,08. Slippage
+//  diset 0 karena order limit di TradingView memang tidak kena slippage.
+//  Angkanya pendekatan, bukan salinan persis — makin jauh harga dari
+//  1,08, makin bergeser sedikit padanan pip-nya.
+//
+//  PERINGATAN JUJUR — angka Strategy Tester PASTI berbeda dari uji utama:
+//  (a) Batas bar historis plan TradingView: akun gratis hanya memuat
+//      beberapa ribu bar terakhir (sekitar 2-3 bulan data M15), sedangkan
+//      uji utama memakai 54.720 bar (1 Apr 2025 - 22 Okt 2026).
+//  (b) Feed harga TradingView (broker yang Bos pilih) != data Dukascopy
+//      yang dipakai uji utama — swing dan fill bisa bergeser.
+//  (c) Pemodelan intrabar TradingView lebih sederhana: pada bar yang sama
+//      ketika harga menyentuh harga entry DAN level TP1, Python selalu
+//      memenangkan aturan hangus (limit batal, tidak jadi trade),
+//      sedangkan TradingView mengikuti urutan harga versi emulatornya —
+//      sebagian kecil kejadian bisa berbeda.
+//  (d) Ukuran posisi di sini dihitung dari ekuitas saat bar freeze tutup;
+//      di Python dihitung saat bar fill. Selisih kecil, tidak mengubah
+//      arah kesimpulan.
+//  Jadi pakai script ini untuk memeriksa GAMBAR dan LOGIKA setup-nya,
+//  bukan untuk menuntut angka yang sama persis dengan uji utama.
+//
+//  PASANG DI: chart EUR/USD timeframe 15 menit (M15).
+// =====================================================================================
+strategy("Strategi Bos ICT-Fib — Verifikasi Visual", shorttitle="Bos ICT-Fib", overlay=true, initial_capital=500, currency=currency.USD, pyramiding=2, commission_type=strategy.commission.percent, commission_value=0.0083, slippage=0, margin_long=1, margin_short=1, max_lines_count=500, max_labels_count=500)
+
+// ---------- Input ----------
+useFVG  = input.bool(false, "Wajib FVG di zona entry (Varian B)", group="Varian")
+riskPct = input.float(0.5, "Risiko per posisi (% ekuitas)", minval=0.05, step=0.05, group="Ukuran Posisi")
+showBg  = input.bool(true, "Warnai latar sesuai bias H1", group="Visual")
+
+// 1 pip EUR/USD = 10 x mintick (mintick 0.00001 -> pip 0.0001)
+pipSize = syminfo.mintick * 10
+
+// ---------- Bias H1 dari struktur pivot terkonfirmasi ----------
+f_biasH1() =>
+    ph  = ta.pivothigh(high, 5, 5)
+    pl  = ta.pivotlow(low, 5, 5)
+    sh1 = ta.valuewhen(not na(ph), ph, 0)
+    sh2 = ta.valuewhen(not na(ph), ph, 1)
+    sl1 = ta.valuewhen(not na(pl), pl, 0)
+    sl2 = ta.valuewhen(not na(pl), pl, 1)
+    b = 0
+    if sh1 > sh2 and sl1 > sl2
+        b := 1
+    else if sh1 < sh2 and sl1 < sl2
+        b := -1
+    b
+
+biasRaw = request.security(syminfo.tickerid, "60", f_biasH1(), lookahead=barmerge.lookahead_off)
+
+var int biasH1 = 0
+if timeframe.change("60")
+    if not na(biasRaw[1])
+        biasH1 := biasRaw[1]
+
+// ---------- Pivot M15 (chart) ----------
+ph15 = ta.pivothigh(high, 5, 5)
+pl15 = ta.pivotlow(low, 5, 5)
+
+// ---------- FVG Varian B (definisi sama seperti Python) ----------
+// Cari FVG searah pada jendela [fromBar, toBar] yang zonanya tumpang
+// tindih [bandLo, bandHi] dan belum termitigasi s/d toBar.
+f_fvgValid(dir, fromBar, toBar, bandLo, bandHi) =>
+    bool found = false
+    int span = toBar - fromBar
+    int maxOff = math.min(span - 2, 400)
+    if maxOff >= 0
+        for off = 0 to maxOff
+            if not found
+                float h3 = high[off]
+                float l3 = low[off]
+                float h1v = high[off + 2]
+                float l1v = low[off + 2]
+                if not na(h3) and not na(l3) and not na(h1v) and not na(l1v)
+                    float zlo = na
+                    float zhi = na
+                    bool isFvg = false
+                    if dir == -1 and h3 < l1v
+                        isFvg := true
+                        zlo := h3
+                        zhi := l1v
+                    if dir == 1 and l3 > h1v
+                        isFvg := true
+                        zlo := h1v
+                        zhi := l3
+                    if isFvg
+                        bool mitigated = false
+                        if off >= 1
+                            for m = 0 to off - 1
+                                if dir == -1 and not na(high[m]) and high[m] >= zlo
+                                    mitigated := true
+                                if dir == 1 and not na(low[m]) and low[m] <= zhi
+                                    mitigated := true
+                        if not mitigated and zlo <= bandHi and zhi >= bandLo
+                            found := true
+    found
+
+// ---------- Keadaan (state) mesin ----------
+var float lastSwingHigh = na
+var float lastSwingLow = na
+var int lastSwingHighBar = na
+var int lastSwingLowBar = na
+var float loSinceHigh = na
+var float hiSinceLow = na
+
+var int phase = 0
+var int sDir = 0
+var int triggerBar = na
+var int brokenBar = na
+var int freezeBar = na
+var float legFixed = na
+var float runExtreme = na
+var float legHigh = na
+var float legLow = na
+var float e1Price = na
+var float e2Price = na
+var float slPrice = na
+var float tp1Price = na
+var float tp2Price = na
+var bool e1Pending = false
+var bool e2Pending = false
+var bool e1Filled = false
+var bool e2Filled = false
+var int prevClosedTrades = 0
+
+// Objek gambar setup aktif disimpan dalam ARRAY global: Pine v5 melarang
+// penugasan ulang (:=) variabel global di dalam fungsi, tetapi mutasi isi
+// array (push/clear) dan penghapusan objeknya dari dalam fungsi diizinkan.
+var line[] setupLines = array.new<line>()
+var label[] setupLabels = array.new<label>()
+
+f_clearDrawings() =>
+    for ln in setupLines
+        line.delete(ln)
+    for lb in setupLabels
+        label.delete(lb)
+    array.clear(setupLines)
+    array.clear(setupLabels)
+
+f_drawSetup() =>
+    f_clearDrawings()
+    array.push(setupLines, line.new(bar_index, e1Price, bar_index + 1, e1Price, extend=extend.right, color=color.green, width=2))
+    array.push(setupLines, line.new(bar_index, e2Price, bar_index + 1, e2Price, extend=extend.right, color=color.yellow, width=2))
+    array.push(setupLines, line.new(bar_index, slPrice, bar_index + 1, slPrice, extend=extend.right, color=color.red, width=2, style=line.style_dashed))
+    array.push(setupLines, line.new(bar_index, tp1Price, bar_index + 1, tp1Price, extend=extend.right, color=color.blue, width=2))
+    array.push(setupLines, line.new(bar_index, tp2Price, bar_index + 1, tp2Price, extend=extend.right, color=color.new(color.blue, 40), width=2))
+    array.push(setupLabels, label.new(bar_index, e1Price, "E1 - 0.655 - " + str.tostring(e1Price, format.mintick), style=label.style_label_left, color=color.green, textcolor=color.white, size=size.small))
+    array.push(setupLabels, label.new(bar_index, e2Price, "E2 - 0.69 - " + str.tostring(e2Price, format.mintick), style=label.style_label_left, color=color.yellow, textcolor=color.black, size=size.small))
+    array.push(setupLabels, label.new(bar_index, slPrice, "SL - 0.85 - " + str.tostring(slPrice, format.mintick), style=label.style_label_left, color=color.red, textcolor=color.white, size=size.small))
+    array.push(setupLabels, label.new(bar_index, tp1Price, "TP1 - ujung leg - " + str.tostring(tp1Price, format.mintick), style=label.style_label_left, color=color.blue, textcolor=color.white, size=size.small))
+    array.push(setupLabels, label.new(bar_index, tp2Price, (sDir == -1 ? "TP2 - ext -0.4 - " : "TP2 - ext +0.4 - ") + str.tostring(tp2Price, format.mintick), style=label.style_label_left, color=color.new(color.blue, 40), textcolor=color.white, size=size.small))
+
+// ---------- Peringatan bila chart bukan M15 ----------
+if barstate.isfirst and timeframe.period != "15"
+    label.new(bar_index, high, "PERINGATAN: script ini untuk chart 15 menit (M15), pair EUR/USD", style=label.style_label_down, color=color.orange, textcolor=color.black, size=size.small)
+
+// =====================================================================================
+//  MESIN UTAMA — semua keputusan diambil pada tutup bar (barstate.isconfirmed),
+//  sama seperti Python yang bekerja per bar tutup.
+// =====================================================================================
+if barstate.isconfirmed
+    // ----- 1) Pivot M15 yang baru terkonfirmasi pada tutup bar ini -----
+    bool newHigh = not na(ph15)
+    bool newLow = not na(pl15)
+    if newLow
+        lastSwingLow := pl15
+        lastSwingLowBar := bar_index - 5
+        hiSinceLow := math.max(high, high[1], high[2], high[3], high[4], high[5])
+    if newHigh
+        lastSwingHigh := ph15
+        lastSwingHighBar := bar_index - 5
+        loSinceHigh := math.min(low, low[1], low[2], low[3], low[4], low[5])
+    if not newLow and not na(hiSinceLow)
+        hiSinceLow := math.max(hiSinceLow, high)
+    if not newHigh and not na(loSinceHigh)
+        loSinceHigh := math.min(loSinceHigh, low)
+
+    // ----- 2) Fase leg: perbarui ekstrem berjalan, cek freeze -----
+    if phase == 1 and bar_index > triggerBar
+        if sDir == -1
+            runExtreme := math.min(runExtreme, low)
+        else
+            runExtreme := math.max(runExtreme, high)
+        float legRun = sDir == -1 ? legFixed - runExtreme : runExtreme - legFixed
+        bool retraceHit = legRun > 0 and (sDir == -1 ? high >= runExtreme + 0.2 * legRun : low <= runExtreme - 0.2 * legRun)
+        bool pivotHit = sDir == -1 ? (newLow and (bar_index - 5) >= triggerBar) : (newHigh and (bar_index - 5) >= triggerBar)
+        if retraceHit or pivotHit
+            legHigh := sDir == -1 ? legFixed : runExtreme
+            legLow := sDir == -1 ? runExtreme : legFixed
+            float legLen = legHigh - legLow
+            if legLen <= 0
+                phase := 0
+            else
+                float fE1 = sDir == -1 ? 0.655 : 0.345
+                float fE2 = sDir == -1 ? 0.69 : 0.31
+                float fSL = sDir == -1 ? 0.85 : 0.15
+                float fTP1 = sDir == -1 ? 0.0 : 1.0
+                float fTP2 = sDir == -1 ? -0.4 : 1.4
+                e1Price := legLow + fE1 * legLen
+                e2Price := legLow + fE2 * legLen
+                slPrice := legLow + fSL * legLen
+                tp1Price := legLow + fTP1 * legLen
+                tp2Price := legLow + fTP2 * legLen
+                bool okFVG = true
+                if useFVG
+                    okFVG := f_fvgValid(sDir, brokenBar, bar_index, math.min(e1Price, e2Price), math.max(e1Price, e2Price))
+                if not okFVG
+                    phase := 0
+                else
+                    float riskUsd = riskPct / 100.0 * strategy.equity
+                    float d1 = math.abs(e1Price - slPrice) / pipSize
+                    float d2 = math.abs(e2Price - slPrice) / pipSize
+                    float q1 = d1 > 0 ? riskUsd / (d1 * 10.0) * 100000 : 0.0
+                    float q2 = d2 > 0 ? riskUsd / (d2 * 10.0) * 100000 : 0.0
+                    if sDir == -1
+                        strategy.entry("E1", strategy.short, qty=math.round(q1), limit=e1Price)
+                        strategy.entry("E2", strategy.short, qty=math.round(q2), limit=e2Price)
+                    else
+                        strategy.entry("E1", strategy.long, qty=math.round(q1), limit=e1Price)
+                        strategy.entry("E2", strategy.long, qty=math.round(q2), limit=e2Price)
+                    strategy.exit("X1", from_entry="E1", stop=slPrice, limit=tp1Price)
+                    strategy.exit("X2", from_entry="E2", stop=slPrice, limit=tp2Price)
+                    e1Pending := true
+                    e2Pending := true
+                    e1Filled := false
+                    e2Filled := false
+                    freezeBar := bar_index
+                    phase := 2
+                    f_drawSetup()
+
+    // ----- 3) Fase limit/posisi: fill, hangus, batal, selesai -----
+    if phase == 2
+        bool openE1 = false
+        bool openE2 = false
+        if strategy.opentrades > 0
+            for i = 0 to strategy.opentrades - 1
+                string eid = strategy.opentrades.entry_id(i)
+                if eid == "E1"
+                    openE1 := true
+                    e1Filled := true
+                    e1Pending := false
+                if eid == "E2"
+                    openE2 := true
+                    e2Filled := true
+                    e2Pending := false
+        if openE1
+            strategy.exit("X1", from_entry="E1", stop=slPrice, limit=tp1Price)
+        if openE2
+            strategy.exit("X2", from_entry="E2", stop=slPrice, limit=tp2Price)
+        // Pine v5 tidak punya strategy.closedtrades.entry_id(); strategi ini hanya
+        // pernah menaruh order E1/E2, jadi trade tertutup baru PASTI milik setup
+        // ini -> batalkan limit yang masih menggantung (aturan Bos).
+        if strategy.closedtrades > prevClosedTrades
+            strategy.cancel("E1")
+            strategy.cancel("E2")
+            e1Pending := false
+            e2Pending := false
+            prevClosedTrades := strategy.closedtrades
+        if bar_index > freezeBar and not e1Filled and not e2Filled and (e1Pending or e2Pending)
+            bool hitTP1 = sDir == -1 ? low <= tp1Price : high >= tp1Price
+            if hitTP1
+                strategy.cancel("E1")
+                strategy.cancel("E2")
+                e1Pending := false
+                e2Pending := false
+        if biasH1 != 0 and biasH1 == -sDir and (e1Pending or e2Pending)
+            strategy.cancel("E1")
+            strategy.cancel("E2")
+            e1Pending := false
+            e2Pending := false
+        if not openE1 and not openE2 and not e1Pending and not e2Pending
+            f_clearDrawings()
+            phase := 0
+
+    // ----- 4) Bias berbalik saat fase leg -> leg batal -----
+    if phase == 1 and biasH1 != 0 and biasH1 == -sDir
+        phase := 0
+
+    // ----- 5) Pemicu MSS (hanya saat tidak ada setup aktif) -----
+    if phase == 0 and biasH1 != 0
+        if biasH1 == -1 and not na(lastSwingLow) and not na(hiSinceLow)
+            bool freshDown = close[1] >= lastSwingLow or newLow
+            if close < lastSwingLow and freshDown
+                phase := 1
+                sDir := -1
+                triggerBar := bar_index
+                brokenBar := lastSwingLowBar
+                legFixed := hiSinceLow
+                runExtreme := low
+        if biasH1 == 1 and not na(lastSwingHigh) and not na(loSinceHigh)
+            bool freshUp = close[1] <= lastSwingHigh or newHigh
+            if close > lastSwingHigh and freshUp
+                phase := 1
+                sDir := 1
+                triggerBar := bar_index
+                brokenBar := lastSwingHighBar
+                legFixed := loSinceHigh
+                runExtreme := high
+
+// ---------- Visual latar bias H1 & garis swing terakhir ----------
+color biasColor = biasH1 == 1 ? color.new(color.green, 93) : biasH1 == -1 ? color.new(color.red, 93) : na
+bgcolor(showBg ? biasColor : na, title="Bias H1")
+plot(lastSwingHigh, "Swing High terakhir (terkonfirmasi)", color=color.new(color.gray, 40), style=plot.style_linebr)
+plot(lastSwingLow, "Swing Low terakhir (terkonfirmasi)", color=color.new(color.gray, 40), style=plot.style_linebr)

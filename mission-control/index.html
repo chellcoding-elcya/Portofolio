@@ -1,0 +1,1175 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mission Control — Tim AI</title>
+<style>
+  :root{
+    --bg:#0a0a0b; --bg2:#101012; --card:#161618; --card2:#1c1c1f; --line:#26262a;
+    --text:#ededed; --muted:#a1a1aa; --faint:#6b6b72;
+    --green:#34c47c; --amber:#e5a83d; --red:#e2543e; --blue:#5b9bd5; --violet:#a78bfa;
+    --radius:16px; --shadow:0 8px 30px rgba(0,0,0,.35);
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
+  html,body{margin:0; padding:0; background:var(--bg); color:var(--text);
+    font-family:Inter, ui-sans-system, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-size:14px; line-height:1.5}
+  a{color:var(--blue); text-decoration:none} a:hover{text-decoration:underline}
+  button{font:inherit; color:inherit}
+  /* ---------- layout ---------- */
+  #sidebar{position:fixed; left:0; top:0; bottom:0; width:224px; background:var(--bg2);
+    border-right:1px solid var(--line); padding:20px 12px; display:flex; flex-direction:column; gap:2px; z-index:40}
+  #sidebar .brand{padding:2px 10px 18px}
+  #sidebar .brand h1{font-size:15px; margin:0; letter-spacing:.02em; font-weight:650}
+  #sidebar .brand p{margin:2px 0 0; color:var(--faint); font-size:12px}
+  .navbtn{display:flex; align-items:center; gap:10px; width:100%; text-align:left; background:none; border:0;
+    padding:9px 10px; border-radius:10px; color:var(--muted); cursor:pointer; font-size:13.5px}
+  .navbtn:hover{background:var(--card2); color:var(--text)}
+  .navbtn.active{background:var(--card2); color:var(--text)}
+  .navbtn .ic{width:18px; text-align:center; flex:none}
+  .navbtn .bdg{margin-left:auto}
+  #sidebar .foot{margin-top:auto; padding:10px; color:var(--faint); font-size:11.5px; border-top:1px solid var(--line)}
+  #main{margin-left:224px; min-height:100vh; display:flex; flex-direction:column}
+  #topbar{position:sticky; top:0; z-index:30; background:rgba(16,16,18,.88); backdrop-filter:blur(8px);
+    border-bottom:1px solid var(--line); padding:12px 24px; display:flex; align-items:center; gap:14px; flex-wrap:wrap}
+  #topbar h2{font-size:16px; margin:0; font-weight:650}
+  #topbar .spacer{flex:1}
+  #topbar .meta{color:var(--faint); font-size:12px}
+  /* ---------- components ---------- */
+  .btn-ghost{background:transparent; border:1px solid var(--line); border-radius:10px; padding:7px 14px; cursor:pointer; color:var(--text)}
+  .btn-ghost:hover{background:var(--card2)}
+  .btn-ghost.warn{border-color:#54431e; color:var(--amber)}
+  .btn-solid{background:#ededed; color:#111; border:0; border-radius:10px; padding:8px 14px; cursor:pointer; font-weight:600}
+  .badge{display:inline-flex; align-items:center; gap:6px; padding:2px 9px; border-radius:999px; font-size:11.5px;
+    background:var(--card2); border:1px solid var(--line); color:var(--muted); white-space:nowrap}
+  .badge .dot{width:7px; height:7px; border-radius:50%; background:var(--faint); flex:none}
+  .badge.working{color:#bff0d6} .badge.working .dot{background:var(--green)}
+  .badge.idle .dot{background:#8a8a92}
+  .badge.paused{color:#ffe1a8} .badge.paused .dot{background:var(--amber)}
+  .badge.on{color:#bff0d6} .badge.on .dot{background:var(--green)}
+  .badge.off .dot{background:#8a8a92}
+  .badge.failed,.badge.danger{color:#ffc9c0} .badge.failed .dot,.badge.danger .dot{background:var(--red)}
+  .badge.done{color:#bff0d6} .badge.done .dot{background:var(--green)}
+  .badge.queued{color:#ffe1a8} .badge.queued .dot{background:var(--amber)}
+  .badge.count{background:#ededed; color:#111; border-color:#ededed; font-weight:650; padding:0 7px}
+  .content{padding:24px; max-width:1180px; width:100%; margin:0 auto}
+  .view{display:none} .view.active{display:block}
+  .grid{display:grid; gap:16px}
+  .grid.c2{grid-template-columns:repeat(auto-fill,minmax(320px,1fr))}
+  .grid.c3{grid-template-columns:repeat(auto-fill,minmax(230px,1fr))}
+  .card{background:var(--card); border:1px solid var(--line); border-radius:var(--radius); box-shadow:var(--shadow); padding:18px}
+  .card h3,.kicker{font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--faint); margin:0 0 10px; font-weight:650}
+  .card .big{font-size:22px; font-weight:650; letter-spacing:-.01em}
+  .card .sub{color:var(--muted); font-size:12.5px; margin-top:4px}
+  .card .tiny{color:var(--faint); font-size:11.5px; margin-top:6px}
+  .bar{height:8px; border-radius:99px; background:#26262a; overflow:hidden; margin-top:12px}
+  .bar > i{display:block; height:100%; border-radius:99px; background:#8b93a7; transition:width .5s ease}
+  .bar > i.hot{background:var(--red)} .bar > i.warm{background:var(--amber)} .bar > i.ok{background:var(--green)}
+  .row{display:flex; align-items:center; gap:12px; padding:12px 0; border-bottom:1px solid var(--line)}
+  .row:last-child{border-bottom:0}
+  .row .grow{flex:1; min-width:0}
+  .row .title{font-weight:600; overflow:hidden; text-overflow:ellipsis}
+  .row .detail{color:var(--muted); font-size:12.5px; overflow:hidden; text-overflow:ellipsis}
+  .avatar{width:38px; height:38px; border-radius:12px; flex:none; display:flex; align-items:center; justify-content:center;
+    font-weight:700; color:#fff; font-size:15px}
+  .empty{color:var(--faint); padding:26px 10px; text-align:center; border:1px dashed var(--line); border-radius:var(--radius)}
+  input[type=text],select{background:var(--bg2); border:1px solid var(--line); color:var(--text);
+    border-radius:10px; padding:9px 12px; font:inherit; width:100%}
+  details.card{padding:0} details.card summary{cursor:pointer; padding:16px 18px; font-weight:600; list-style:none}
+  details.card .inner{padding:0 18px 8px}
+  pre.log{background:#0d0d0f; border:1px solid var(--line); border-radius:var(--radius); padding:16px;
+    font-size:12px; line-height:1.7; overflow:auto; max-height:70vh; white-space:pre-wrap; word-break:break-word; color:#cfcfd4}
+  .chips{display:flex; gap:8px; flex-wrap:wrap}
+  /* ---------- office ---------- */
+  #office-wrap{position:relative; border-radius:var(--radius); overflow:hidden; border:1px solid var(--line);
+    height:calc(100vh - 170px); min-height:420px; background:#0d0f13; box-shadow:var(--shadow)}
+  #office-wrap canvas{display:block; width:100%; height:100%; touch-action:none}
+  #office-overlay{position:absolute; left:14px; bottom:14px; display:flex; gap:8px; flex-wrap:wrap; max-width:90%}
+  #office-hint{position:absolute; right:14px; top:12px; color:#cfd3dc; background:rgba(10,10,12,.55);
+    padding:6px 10px; border-radius:10px; font-size:12px; backdrop-filter:blur(4px)}
+  #office-fallback{position:absolute; inset:0; display:none; align-items:center; justify-content:center; color:var(--muted); padding:24px; text-align:center}
+  /* ---------- mobile ---------- */
+  @media (max-width:820px){
+    #sidebar{left:0; right:0; top:auto; bottom:0; width:auto; height:60px; flex-direction:row; align-items:center;
+      padding:6px 8px; overflow-x:auto; border-right:0; border-top:1px solid var(--line); gap:4px}
+    #sidebar .brand,#sidebar .foot{display:none}
+    .navbtn{width:auto; flex:none; padding:8px 10px} .navbtn span.lbl{display:none}
+    .navbtn.active span.lbl{display:inline}
+    #main{margin-left:0; padding-bottom:64px}
+    .content{padding:16px}
+    #office-wrap{height:calc(100dvh - 140px)}
+    body.office-full{overflow:hidden}
+    body.office-full #topbar{display:none}
+    body.office-full #main{padding-bottom:0}
+    body.office-full .content{padding:0}
+    body.office-full #office-wrap{position:fixed; inset:0; height:100dvh; width:100vw; border-radius:0; border:0; z-index:20}
+    body.office-full #sidebar{z-index:50; background:rgba(16,16,18,.82); backdrop-filter:blur(8px)}
+  }
+</style>
+</head>
+<body>
+<aside id="sidebar">
+  <div class="brand"><h1>◈ Mission Control</h1><p>Kantor Pusat Tim Archell</p></div>
+  <div id="nav"></div>
+  <div class="foot">Data nyata dari ledger &amp; /proc.<br>Tanpa simulasi. Polling 3 detik.</div>
+</aside>
+<div id="main">
+  <header id="topbar">
+    <h2 id="view-title">Virtual Office</h2>
+    <span class="badge" id="dispatch-badge"><span class="dot"></span>Dispatch aktif</span>
+    <div class="spacer"></div>
+    <span class="meta" id="public-link"></span>
+    <span class="meta" id="updated-at">memuat…</span>
+    <span class="meta" id="today-date"></span>
+    <button class="btn-ghost warn" id="dispatch-btn">⏸ Pause dispatch</button>
+  </header>
+  <div class="content">
+    <section class="view active" id="view-office">
+      <div id="office-wrap">
+        <div id="office-fallback">3D tidak dapat dimuat di perangkat ini.<br>Menu lain tetap berfungsi penuh.</div>
+        <div id="office-hint">Seret untuk memutar • scroll untuk zoom • klik robot pemimpin untuk pause/resume timnya</div>
+        <div id="office-overlay"></div>
+      </div>
+    </section>
+    <section class="view" id="view-agents"><div class="grid c2" id="agents-grid"></div></section>
+    <section class="view" id="view-portfolio"><div class="grid c2" id="portfolio-grid"></div></section>
+    <section class="view" id="view-queue">
+      <div class="card" style="margin-bottom:16px">
+        <h3>Tambah quick task</h3>
+        <div class="chips" style="margin-bottom:12px">
+          <button class="btn-ghost" data-quick="tono">🔎 Research</button>
+          <button class="btn-ghost" data-quick="dani">💻 Coding</button>
+          <button class="btn-ghost" data-quick="jaka">👁 Vision</button>
+          <button class="btn-ghost" data-quick="mu">🎨 Design</button>
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+          <div style="flex:1;min-width:220px"><input type="text" id="q-prompt" placeholder="Tulis tugas cepat…"></div>
+          <div style="width:190px"><select id="q-agent"></select></div>
+          <button class="btn-solid" id="q-add">+ Antrekan</button>
+        </div>
+        <div class="tiny" id="q-msg"></div>
+      </div>
+      <div class="card"><h3>Antrean tugas</h3><div id="queue-list"></div></div>
+    </section>
+    <section class="view" id="view-system"><div class="grid c2" id="system-grid"></div></section>
+    <section class="view" id="view-vps"><div class="grid c3" id="vps-grid"></div></section>
+    <section class="view" id="view-schedules">
+      <div class="card" style="margin-bottom:16px"><h3>Jadwal Saya</h3><div id="sched-mine"></div></div>
+      <details class="card"><summary>Jadwal Sistem <span class="badge" id="sched-sys-count"></span></summary>
+        <div class="inner"><div id="sched-system"></div></div></details>
+    </section>
+    <section class="view" id="view-token"><div class="grid c2" id="token-grid"></div></section>
+    <section class="view" id="view-fleet"><div class="grid c2" id="fleet-grid"></div></section>
+    <section class="view" id="view-log"><pre class="log" id="log-pre">memuat log…</pre></section>
+  </div>
+</div>
+<script src="vendor/three.min.js"></script>
+<script>
+'use strict';
+/* ============================== state & nav ============================== */
+const NAV = [
+  ['office','Virtual Office','🏢'], ['agents','Agent Overview','🤖'], ['portfolio','Portofolio Tim','📁'], ['queue','Task Queue','📥'],
+  ['system','System Metrics','📊'], ['vps','VPS Status','🖥️'], ['schedules','Tugas Terjadwal','🗓️'],
+  ['token','Token Status','🎟️'], ['fleet','Agent Fleet','🚀'], ['log','Real-Time Log','📜'],
+];
+window.__officeBooted = false;
+window.addEventListener('error', e => {
+  if (window.__officeBooted) return;
+  const fb = document.getElementById('office-fallback');
+  if (fb && document.getElementById('view-office')) {
+    fb.innerHTML = '3D gagal dimuat di browser ini.<br><span style="font-size:12px;color:#8a8a92">' + String(e.message || 'WebGL tidak tersedia').replace(/</g, '&lt;') + '</span><br>Menu lain tetap berfungsi penuh.';
+    fb.style.display = 'flex';
+  }
+});
+let STATE = null, currentView = 'office';
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const navEl = $('#nav');
+NAV.forEach(([id,label,ic]) => {
+  const b = document.createElement('button');
+  b.className = 'navbtn' + (id === 'office' ? ' active' : ''); b.dataset.view = id;
+  b.innerHTML = `<span class="ic">${ic}</span><span class="lbl">${label}</span>` + (id === 'queue' ? '<span class="bdg" id="nav-queue-badge"></span>' : '');
+  b.onclick = () => switchView(id);
+  navEl.appendChild(b);
+});
+function switchView(id) {
+  currentView = id;
+  document.querySelectorAll('.navbtn').forEach(b => b.classList.toggle('active', b.dataset.view === id));
+  document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === 'view-' + id));
+  $('#view-title').textContent = NAV.find(n => n[0] === id)[1];
+  document.body.classList.toggle('office-full', id === 'office' && window.innerWidth <= 820);
+  if (id === 'office' && window.Office3D) Office3D.resize();
+  if (STATE) render();
+}
+function fmtBytes(n) {
+  if (!n && n !== 0) return '—';
+  const u = ['B','KB','MB','GB','TB']; let i = 0, v = n;
+  while (v >= 1024 && i < u.length - 1) { v /= 1024; i++; }
+  return `${v >= 100 ? Math.round(v) : v.toFixed(1)} ${u[i]}`;
+}
+function fmtGB(n) { return (n / 1073741824).toFixed(1) + ' GB'; }
+function fmtUptime(sec) {
+  if (!sec) return '—';
+  const d = Math.floor(sec / 86400), h = Math.floor(sec % 86400 / 3600), m = Math.floor(sec % 3600 / 60);
+  return (d ? d + ' hari ' : '') + h + ' jam ' + m + ' menit';
+}
+function fmtDT(iso) {
+  if (!iso) return '—';
+  try { return new Intl.DateTimeFormat('id-ID', { timeZone: 'Asia/Jakarta', day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }).format(new Date(iso)) + ' WIB'; }
+  catch { return iso; }
+}
+function fmtTime(iso) {
+  if (!iso) return '—';
+  try { return new Intl.DateTimeFormat('id-ID', { timeZone: 'Asia/Jakarta', hour: '2-digit', minute: '2-digit', second: '2-digit' }).format(new Date(iso)) + ' WIB'; }
+  catch { return iso; }
+}
+async function api(path, opts) {
+  const r = await fetch(path, opts);
+  return r.json();
+}
+async function refresh() {
+  try {
+    STATE = await api('/api/state');
+    render();
+    if (window.Office3D) Office3D.syncAgents(STATE.agents, STATE.tasks);
+  } catch (e) {
+    $('#updated-at').textContent = 'gagal memuat /api/state — server mati?';
+  }
+}
+setInterval(refresh, 3000);
+
+/* ============================== renderers ============================== */
+function statusBadge(st) { return `<span class="badge ${esc(st)}"><span class="dot"></span>${esc(st)}</span>`; }
+function render() {
+  if (!STATE) return;
+  $('#updated-at').textContent = 'Diperbarui ' + fmtTime(STATE.fetched_at);
+  const db = $('#dispatch-badge'), dBtn = $('#dispatch-btn');
+  if (STATE.dispatch_paused) { db.className = 'badge paused'; db.innerHTML = '<span class="dot"></span>Dispatch PAUSED'; dBtn.textContent = '▶ Resume dispatch'; }
+  else { db.className = 'badge on'; db.innerHTML = '<span class="dot"></span>Dispatch aktif'; dBtn.textContent = '⏸ Pause dispatch'; }
+  const pl = $('#public-link');
+  pl.innerHTML = STATE.public_url ? `Publik: <a href="${esc(STATE.public_url)}" target="_blank" rel="noopener">${esc(STATE.public_url)}</a>` : 'Publik: tunnel belum jalan';
+  const nb = $('#nav-queue-badge');
+  if (nb) nb.innerHTML = STATE.queue_queued_count ? `<span class="badge count">${STATE.queue_queued_count}</span>` : '';
+  ({ office: renderOfficeOverlay, agents: renderAgents, portfolio: renderPortfolio, queue: renderQueue, system: renderSystem,
+     vps: renderVPS, schedules: renderSchedules, token: renderToken, fleet: renderFleet, log: renderLog }[currentView] || (() => {}))();
+}
+function renderOfficeOverlay() {
+  const subWorking = STATE.agents.reduce((n, a) => n + (a.subordinates || []).filter(s => s.status === 'working').length, 0);
+  $('#office-overlay').innerHTML = STATE.agents.map(a =>
+    `<span class="badge ${a.status}"><span class="dot"></span>${esc(a.name)} — ${esc(a.status)}</span>`).join('')
+    + `<span class="badge"><span class="dot"></span>24 karakter di kantor • ${subWorking} anak buah bekerja</span>`;
+}
+function portfolioHTML(list, total) {
+  if (!total) return '<div class="tiny">Belum ada tugas selesai tercatat — masih standby.</div>';
+  return `<div>${list.map(p => `<div class="row" style="padding:8px 0"><div class="grow"><div class="title" style="font-size:13px">${esc(p.title)}</div><div class="detail">${fmtDT(p.ts)}${p.detail ? ' • ' + esc(p.detail) : ''}</div></div><span class="badge done"><span class="dot"></span>done</span></div>`).join('')}
+    ${total > list.length ? `<div class="tiny">+ ${total - list.length} tugas selesai lainnya (total ${total})</div>` : `<div class="tiny">Total ${total} tugas selesai</div>`}</div>`;
+}
+function subCard(s) {
+  return `<div class="row" style="padding:10px 0"><div class="avatar" style="background:${esc(s.color)};width:32px;height:32px;font-size:13px">${esc(s.name[0])}</div>
+    <div class="grow"><div class="title" style="font-size:13.5px">${esc(s.name)} — ${esc(s.role)}</div>
+    <div class="detail">${s.active_task ? 'Sedang: ' + esc(s.active_task.title || s.active_task.task_id) : (s.portfolio_total ? s.portfolio_total + ' tugas selesai' : 'Standby di timnya')}</div></div>
+    ${statusBadge(s.status)}</div>`;
+}
+function agentCard(a, withCaps) {
+  return `<div class="card">
+    <div style="display:flex;gap:12px;align-items:center">
+      <div class="avatar" style="background:${esc(a.color)}">${esc(a.name[0])}</div>
+      <div class="grow" style="flex:1"><div style="font-weight:650">${esc(a.name)}</div><div class="sub" style="margin:0">${esc(a.role)}</div></div>
+      ${statusBadge(a.status)}
+    </div>
+    <div class="sub" style="margin-top:12px">${a.active_task
+      ? `Sedang: <b style="color:var(--text)">${esc(a.active_task.title || a.active_task.task_id)}</b><br><span class="tiny">${esc(a.active_task.detail || '')} • sejak ${fmtDT(a.active_task.ts)}</span>`
+      : (a.queued_count ? `${a.queued_count} tugas menunggu di antrean` : 'Tidak ada task aktif saat ini.')}
+    </div>
+    ${withCaps ? `<div class="chips" style="margin-top:12px">${a.capabilities.map(c => `<span class="badge">${esc(c)}</span>`).join('')}</div>` : ''}
+    <details style="margin-top:14px"><summary style="cursor:pointer;font-weight:600">👥 Timnya — 3 anak buah</summary>
+      <div style="margin-top:4px">${(a.subordinates || []).map(subCard).join('')}</div></details>
+    <details style="margin-top:10px"><summary style="cursor:pointer;font-weight:600">📁 Portofolio ${esc(a.name)} (${a.portfolio_total || 0} selesai)</summary>
+      <div style="margin-top:4px">${portfolioHTML(a.portfolio || [], a.portfolio_total || 0)}</div></details>
+    <div style="margin-top:14px"><button class="btn-ghost" onclick="toggleAgentPause('${a.id}', ${!a.paused})">${a.paused ? '▶ Resume agent' : '⏸ Pause agent'}</button></div>
+  </div>`;
+}
+function renderAgents() { $('#agents-grid').innerHTML = STATE.agents.map(a => agentCard(a, false)).join(''); }
+function renderPortfolio() {
+  const cards = [];
+  STATE.agents.forEach(a => {
+    cards.push(`<div class="card"><div style="display:flex;gap:12px;align-items:center">
+      <div class="avatar" style="background:${esc(a.color)}">${esc(a.name[0])}</div>
+      <div class="grow" style="flex:1"><div style="font-weight:650">${esc(a.name)} — Pemimpin Tim</div><div class="sub" style="margin:0">${esc(a.role)}</div></div>
+      ${statusBadge(a.status)}</div><div style="margin-top:12px">${portfolioHTML(a.portfolio || [], a.portfolio_total || 0)}</div></div>`);
+    (a.subordinates || []).forEach(s => {
+      cards.push(`<div class="card"><div style="display:flex;gap:12px;align-items:center">
+        <div class="avatar" style="background:${esc(s.color)};width:32px;height:32px;font-size:13px">${esc(s.name[0])}</div>
+        <div class="grow" style="flex:1"><div style="font-weight:650">${esc(s.name)}</div><div class="sub" style="margin:0">Anak buah ${esc(a.name)} • ${esc(s.role)}</div></div>
+        ${statusBadge(s.status)}</div><div style="margin-top:12px">${portfolioHTML(s.portfolio || [], s.portfolio_total || 0)}</div></div>`);
+    });
+  });
+  $('#portfolio-grid').innerHTML = cards.join('');
+}
+function renderFleet() { $('#fleet-grid').innerHTML = STATE.agents.map(a => agentCard(a, true)).join(''); }
+function renderQueue() {
+  const sel = $('#q-agent');
+  if (!sel.options.length) STATE.roster.forEach(r => { const o = document.createElement('option'); o.value = r.id; o.textContent = `${r.name} — ${r.role}`; sel.appendChild(o); });
+  const items = [...STATE.queue].reverse();
+  $('#queue-list').innerHTML = items.length ? items.map(q => `<div class="row">
+      <div class="grow"><div class="title">${esc(q.prompt)}</div><div class="detail">${fmtDT(q.ts)} • untuk ${esc(q.agent)}</div></div>
+      ${statusBadge(q.status)}</div>`).join('')
+    : '<div class="empty">Antrean kosong. Tambahkan quick task di atas — akan tercatat nyata di data/queue.jsonl.</div>';
+}
+function barHTML(pct, cls) { return `<div class="bar"><i class="${cls || ''}" style="width:${Math.min(100, Math.max(0, pct))}%"></i></div>`; }
+function renderSystem() {
+  const s = STATE.system;
+  const loadPct = s.cores ? Math.round(s.load[0] / s.cores * 100) : 0;
+  const memPct = s.mem_host_total ? Math.round(s.mem_container_bytes / s.mem_host_total * 100) : 0;
+  $('#system-grid').innerHTML = `
+    <div class="card"><h3>CPU Load (dari /proc/loadavg)</h3><div class="big">${s.load.map(x => x.toFixed(2)).join(' · ')}</div>
+      <div class="sub">1 / 5 / 15 menit • ${s.cores} core • ${esc(s.cpu_model || '')}</div>${barHTML(loadPct, loadPct >= 90 ? 'hot' : loadPct >= 60 ? 'warm' : 'ok')}</div>
+    <div class="card"><h3>Memory (container)</h3><div class="big">${fmtBytes(s.mem_container_bytes)}</div>
+      <div class="sub">Jumlah RSS ${s.processes} proses terlihat di /proc • host tersedia ${fmtBytes(s.mem_host_available)} dari ${fmtBytes(s.mem_host_total)}</div>${barHTML(memPct, 'ok')}</div>
+    <div class="card"><h3>Uptime Sistem</h3><div class="big">${fmtUptime(s.uptime_sec)}</div><div class="sub">Host: ${esc(s.hostname)} • sejak boot (dari /proc/uptime)</div></div>
+    <div class="card"><h3>Aktivitas Ledger</h3><div class="big">${STATE.tasks_total} event</div>
+      <div class="sub">${STATE.agents.filter(a => a.status === 'working').length} agent bekerja • ${STATE.queue_queued_count} di antrean • dispatch ${STATE.dispatch_paused ? 'PAUSED' : 'aktif'}</div></div>`;
+}
+function renderVPS() {
+  const v = STATE.vps, d = v.disk, mc = v.memory_container;
+  const memPctHost = mc.host_total ? Math.round(mc.used_bytes / mc.host_total * 100) : 0;
+  const wd = v.watchdog_last;
+  const cards = [
+    `<div class="card"><h3>Disk</h3><div class="big">${fmtGB(d.used)} / ${fmtGB(d.total)}</div>
+      <div class="sub">Terpakai ${d.pct}% di ${esc(d.mount)}</div>${barHTML(d.pct, d.pct >= 90 ? 'hot' : d.pct >= 75 ? 'warm' : 'ok')}</div>`,
+    `<div class="card"><h3>CPU</h3><div class="big" style="font-size:16px">${esc(v.cpu.model || '—')}</div>
+      <div class="sub">${v.cpu.cores} core • load ${v.cpu.load.map(x => x.toFixed(2)).join(' · ')}</div></div>`,
+    `<div class="card"><h3>Memory (container)</h3><div class="big">${fmtBytes(mc.used_bytes)}</div>
+      <div class="sub">container kita • host: ${fmtGB(mc.host_total - mc.host_available)} / ${fmtGB(mc.host_total)} (di luar kendali)</div>
+      <div class="tiny">RSS ${mc.processes} proses × page ${mc.page_size}B — bukan angka host dari /proc/meminfo.</div>${barHTML(memPctHost, 'ok')}</div>`,
+    `<div class="card"><h3>Uptime Server</h3><div class="big">${fmtUptime(v.uptime_sec)}</div><div class="sub">dari /proc/uptime</div></div>`,
+    `<div class="card"><h3>Tunnel</h3><div class="big" style="font-size:15px">${v.tunnel.url ? `<a href="${esc(v.tunnel.url)}" target="_blank" rel="noopener">${esc(v.tunnel.url)}</a>` : 'Belum ada URL'}</div>
+      <div style="margin-top:8px">${v.tunnel.online ? '<span class="badge on"><span class="dot"></span>ONLINE</span>' : '<span class="badge off"><span class="dot"></span>OFFLINE</span>'}</div>
+      <div class="tiny">Live-check terakhir: ${fmtTime(v.tunnel.checked_at)} (HTTP 200 = online)</div></div>`,
+    `<div class="card"><h3>OS</h3><div class="big" style="font-size:16px">${esc(v.os.pretty)}</div>
+      <div class="sub">Kernel ${esc(v.os.kernel)} • ${esc(v.os.arch)} • ${esc(v.os.hostname)}</div></div>`,
+    `<div class="card"><h3>Watchdog Terakhir</h3><div class="big" style="font-size:16px">${wd ? fmtDT(wd.ts) : 'Belum pernah jalan'}</div>
+      <div class="sub">${wd ? esc(wd.event || '') + (wd.url ? ' • ' + esc(wd.url) : '') : 'Jalankan watchdog.sh (cron 5 menit) agar tercatat di watchdog-history.jsonl'}</div></div>`,
+  ];
+  $('#vps-grid').innerHTML = cards.join('');
+}
+function schedRow(s) {
+  return `<div class="row"><div class="grow"><div class="title">${esc(s.title)}</div>
+    <div class="detail">${esc(s.label)} • berikutnya: ${s.next_iso ? fmtDT(s.next_iso) : '—'}${s.owner ? ' • ' + esc(s.owner) : ''} • ${esc(s.timezone)}</div></div>
+    <span class="badge ${s.enabled ? 'on' : 'off'}"><span class="dot"></span>${s.enabled ? 'ON' : 'OFF'}</span></div>`;
+}
+function renderSchedules() {
+  const mine = STATE.schedules.filter(s => !s.is_system), sys = STATE.schedules.filter(s => s.is_system);
+  $('#sched-mine').innerHTML = mine.length ? mine.map(schedRow).join('') : '<div class="empty">Belum ada jadwal milik Anda di ~/workspace/cron.d atau goals/*/crons.</div>';
+  $('#sched-system').innerHTML = sys.length ? sys.map(schedRow).join('') : '<div class="empty">Tidak ada jadwal sistem.</div>';
+  $('#sched-sys-count').textContent = sys.length + ' jadwal';
+}
+function renderToken() {
+  const t = STATE.token;
+  $('#token-grid').innerHTML = t.available ? `
+    <div class="card"><h3>Pemakaian Token / Paket</h3><div class="big">${t.usage_percent}% terpakai</div>
+      <div class="sub">${esc(t.plan || 'Paket Muse')}</div>${barHTML(t.usage_percent, t.usage_percent >= 90 ? 'hot' : t.usage_percent >= 70 ? 'warm' : 'ok')}</div>
+    <div class="card"><h3>Reset Batas</h3><div class="big" style="font-size:17px">${esc(t.reset_text || '—')}</div>
+      <div class="sub">Sumber: perintah status langganan Muse (di-cache 60 detik di server).</div></div>`
+  : `<div class="card"><h3>Pemakaian Token / Paket</h3><div class="big" style="font-size:17px">Belum tersambung</div>
+      <div class="sub">${esc(t.message || '')}</div>
+      <div class="tiny">Placeholder ini tidak menampilkan angka palsu — backend mencoba membaca status langganan nyata tiap 60 detik.</div></div>`;
+}
+function renderLog() {
+  const pre = $('#log-pre');
+  pre.textContent = STATE.log.length ? STATE.log.join('\n') : 'Log kosong — belum ada event di ledger.';
+  pre.scrollTop = pre.scrollHeight;
+}
+/* ============================== actions ============================== */
+window.toggleAgentPause = async (agent, paused) => {
+  await api('/api/agent-pause', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ agent, paused }) });
+  refresh();
+};
+$('#dispatch-btn').onclick = async () => {
+  const paused = !(STATE && STATE.dispatch_paused);
+  await api('/api/dispatch', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ paused }) });
+  refresh();
+};
+async function addQueue(prompt, agent) {
+  const msg = $('#q-msg');
+  const r = await api('/api/queue', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt, agent }) });
+  msg.textContent = r.ok ? `✓ Terantre untuk ${agent}: ${prompt}` : '✗ ' + (r.error || 'gagal');
+  if (r.ok) { $('#q-prompt').value = ''; refresh(); }
+}
+$('#q-add').onclick = () => {
+  const p = $('#q-prompt').value.trim();
+  if (!p) { $('#q-msg').textContent = 'Isi dulu tugasnya.'; return; }
+  addQueue(p, $('#q-agent').value || 'anca');
+};
+document.querySelectorAll('[data-quick]').forEach(b => b.onclick = () => {
+  const agent = b.dataset.quick;
+  const label = { tono: 'Riset', dani: 'Coding', jaka: 'Vision check', mu: 'Design' }[agent];
+  const p = window.prompt(`Quick task ${label} — untuk agent ${agent}:`, '');
+  if (p && p.trim()) addQueue(p.trim(), agent);
+});
+$('#q-prompt').addEventListener('keydown', e => { if (e.key === 'Enter') $('#q-add').click(); });
+refresh();
+</script>
+<script>
+/* ============================== Virtual Office 3D ============================== */
+window.Office3D = (function () {
+  const wrap = document.getElementById('office-wrap');
+  function fail(msg) { const fb = document.getElementById('office-fallback');
+    if (msg) fb.innerHTML = '3D tidak dapat dimuat di perangkat ini.<br><span style="font-size:12px;color:#8a8a92">' + String(msg).replace(/</g, '&lt;') + '</span><br>Menu lain tetap berfungsi penuh.';
+    fb.style.display = 'flex'; return { resize(){}, syncAgents(){} }; }
+  if (!window.THREE) return fail('Three.js gagal dimuat');
+  let renderer;
+  try {
+    renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+  } catch (e) { return fail(e && e.message); }
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  wrap.insertBefore(renderer.domElement, wrap.children[0]);
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x0d0f13);
+  scene.fog = new THREE.Fog(0x0d0f13, 38, 78);
+  const camera = new THREE.PerspectiveCamera(46, 1.6, 0.1, 100);
+  scene.add(new THREE.HemisphereLight(0xdfe6f2, 0x1a1c20, 0.75));
+  const key = new THREE.DirectionalLight(0xffffff, 0.75); key.position.set(6, 10, 8); scene.add(key);
+  const warm = new THREE.PointLight(0xffc98a, 0.55, 14); warm.position.set(-6, 3.4, 2); scene.add(warm);
+  const mat = (c, o = {}) => new THREE.MeshStandardMaterial(Object.assign({ color: c, roughness: 0.85, metalness: 0.08 }, o));
+  function box(w, h, d, c, x = 0, y = 0, z = 0, o) { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat(c, o)); m.position.set(x, y, z); return m; }
+  function cyl(rt, rb, h, c, x = 0, y = 0, z = 0, seg = 20) { const m = new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, h, seg), mat(c)); m.position.set(x, y, z); return m; }
+  function sph(r, c, x = 0, y = 0, z = 0, o) { const m = new THREE.Mesh(new THREE.SphereGeometry(r, 20, 16), mat(c, o)); m.position.set(x, y, z); return m; }
+
+  /* ---------- ruangan: kantor perusahaan ---------- */
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(34, 22), mat(0x191b1f, { roughness: 1 })); floor.rotation.x = -Math.PI / 2; scene.add(floor);
+  const rug = new THREE.Mesh(new THREE.PlaneGeometry(30, 13), mat(0x21252d, { roughness: 1 })); rug.rotation.x = -Math.PI / 2; rug.position.set(0, 0.012, -3.2); scene.add(rug);
+  const backWall = box(34, 8, 0.2, 0x14161a, 0, 4, -10.5); scene.add(backWall);
+  const leftWall = box(0.2, 8, 22, 0x121317, -16.5, 4, 0); scene.add(leftWall);
+  const rightWall = box(0.2, 8, 22, 0x121317, 16.5, 4, 0); scene.add(rightWall);
+  // papan nama kantor pusat di dinding belakang
+  (function companySign() {
+    const cv = document.createElement('canvas'); cv.width = 1024; cv.height = 256; const g = cv.getContext('2d');
+    g.fillStyle = '#101318'; g.fillRect(0, 0, 1024, 256);
+    g.fillStyle = '#5b9bd5'; g.fillRect(0, 0, 1024, 10);
+    g.fillStyle = '#5b9bd5'; g.font = 'bold 30px Inter, sans-serif'; g.textAlign = 'center'; g.fillText('MISSION CONTROL', 512, 62);
+    g.fillStyle = '#ffffff'; g.font = 'bold 54px Inter, sans-serif'; g.fillText('KANTOR PUSAT TIM ARCHELL', 512, 138);
+    g.fillStyle = '#a1a1aa'; g.font = '30px Inter, sans-serif'; g.fillText('PM  •  RISET  •  CODING  •  VIDEO  •  DESAIN  •  QC', 512, 198);
+    const tex = new THREE.CanvasTexture(cv);
+    const sign = new THREE.Mesh(new THREE.PlaneGeometry(12, 3), new THREE.MeshBasicMaterial({ map: tex }));
+    sign.position.set(0, 5.6, -10.38); scene.add(sign);
+    scene.add(box(12.4, 3.4, 0.08, 0x2a2d33, 0, 5.6, -10.44));
+    scene.add(sign);
+  })();
+  // jendela kota malam
+  (function window_() {
+    const cv = document.createElement('canvas'); cv.width = 1024; cv.height = 300; const g = cv.getContext('2d');
+    const grad = g.createLinearGradient(0, 0, 0, 300); grad.addColorStop(0, '#0a1024'); grad.addColorStop(1, '#182238'); g.fillStyle = grad; g.fillRect(0, 0, 1024, 300);
+    g.fillStyle = '#e8ecf5'; g.beginPath(); g.arc(905, 52, 22, 0, 7); g.fill();
+    for (let i = 0; i < 90; i++) { g.fillStyle = 'rgba(255,255,255,.75)'; g.fillRect(Math.random() * 1024, Math.random() * 90, 2, 2); }
+    let x = 0;
+    while (x < 1024) { const w = 40 + Math.random() * 70, h = 90 + Math.random() * 170;
+      g.fillStyle = '#0d1322'; g.fillRect(x, 300 - h, w, h);
+      for (let wy = 300 - h + 10; wy < 288; wy += 16) for (let wx = x + 7; wx < x + w - 8; wx += 14)
+        if (Math.random() > 0.45) { g.fillStyle = Math.random() > 0.3 ? '#ffd98a' : '#bcd6ff'; g.fillRect(wx, wy, 6, 8); }
+      x += w + 6; }
+    const tex = new THREE.CanvasTexture(cv);
+    const win = new THREE.Mesh(new THREE.PlaneGeometry(9, 3.8), new THREE.MeshBasicMaterial({ map: tex }));
+    win.position.set(-11.5, 4.0, -10.38); scene.add(win);
+    const frame = box(9.4, 4.2, 0.08, 0x2a2d33, -11.5, 4.0, -10.44); scene.add(frame); scene.add(win);
+  })();
+  // tanaman
+  function plant(x, z, s = 1) {
+    const g = new THREE.Group();
+    g.add(cyl(0.26, 0.2, 0.42, 0x3a3f47, 0, 0.21, 0));
+    g.add(sph(0.34, 0x2e5d3a, 0, 0.78, 0)); g.add(sph(0.26, 0x35704a, 0.22, 0.62, 0.1)); g.add(sph(0.24, 0x2a5136, -0.2, 0.66, -0.08));
+    g.position.set(x, 0, z); g.scale.setScalar(s); scene.add(g);
+  }
+  plant(-15.8, -9.6, 1.25); plant(15.8, -9.6, 1.1); plant(-15.8, 9.2, 0.95); plant(15.8, 9.2, 1.0);
+  // lampu status
+  const statusLampMat = new THREE.MeshStandardMaterial({ color: 0x39404c, emissive: 0x111111, roughness: 0.4 });
+  const lampGroup = new THREE.Group();
+  lampGroup.add(cyl(0.05, 0.07, 2.4, 0x2c2f36, 0, 1.2, 0));
+  const lampBall = new THREE.Mesh(new THREE.SphereGeometry(0.21, 20, 16), statusLampMat); lampBall.position.y = 2.6; lampGroup.add(lampBall);
+  lampGroup.position.set(14.2, 0, -9.6); scene.add(lampGroup);
+
+  /* ---------- panel chart MetaKit di dinding kanan ---------- */
+  function equityTexture() {
+    const cv = document.createElement('canvas'); cv.width = 768; cv.height = 320; const g = cv.getContext('2d');
+    const tex = new THREE.CanvasTexture(cv);
+    let data = null;
+    function draw() {
+      g.fillStyle = '#0d1117'; g.fillRect(0, 0, 768, 320);
+      g.fillStyle = '#e8e8e8'; g.font = 'bold 20px Inter, sans-serif'; g.textAlign = 'left';
+      g.fillText('MetaKit — Profit kumulatif', 16, 30);
+      if (!data || !data.points || !data.points.length) {
+        g.fillStyle = '#8a8a92'; g.font = '16px Inter, sans-serif';
+        g.fillText('Chart belum tersedia — tarik data MetaKit dulu.', 16, 60);
+        tex.needsUpdate = true; return;
+      }
+      const pts = data.points;
+      let mn = 0, mx = 0;
+      pts.forEach(p => { if (p.v < mn) mn = p.v; if (p.v > mx) mx = p.v; });
+      const pad = (mx - mn) * 0.08 + 1; mn -= pad; mx += pad;
+      const X = i => 16 + i / (pts.length - 1) * 736;
+      const Y = v => 280 - (v - mn) / (mx - mn) * 220;
+      g.strokeStyle = '#232830';
+      for (let y = 60; y <= 280; y += 55) { g.beginPath(); g.moveTo(16, y); g.lineTo(752, y); g.stroke(); }
+      g.strokeStyle = '#8a8a92'; g.beginPath(); g.moveTo(16, Y(0)); g.lineTo(752, Y(0)); g.stroke();
+      g.strokeStyle = '#5b9bd5'; g.lineWidth = 2.5; g.beginPath();
+      pts.forEach((p, i) => i ? g.lineTo(X(i), Y(p.v)) : g.moveTo(X(i), Y(p.v))); g.stroke(); g.lineWidth = 1;
+      g.fillStyle = '#a1a1aa'; g.font = '14px Inter, sans-serif';
+      const when = data.fetched_at ? new Date(data.fetched_at).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
+      g.fillText('Maks $' + mx.toFixed(0) + '  •  Min $' + mn.toFixed(0) + '  •  Saldo $' + data.balance + '  •  Ekuitas $' + data.equity + (when ? '  •  Data ' + when : ''), 16, 306);
+      g.textAlign = 'right';
+      g.fillStyle = data.net_profit < 0 ? '#e2543e' : '#34c47c';
+      g.fillText('Net $' + data.net_profit, 752, 30);
+      g.textAlign = 'left';
+      tex.needsUpdate = true;
+    }
+    draw();
+    return { tex, update(d) { data = d; draw(); } };
+  }
+  const equityTex = equityTexture();
+  scene.add(box(9.4, 4.2, 0.08, 0x2a2d33, 11.5, 4.0, -10.44));
+  const eqScr = new THREE.Mesh(new THREE.PlaneGeometry(9, 3.8), new THREE.MeshBasicMaterial({ map: equityTex.tex }));
+  eqScr.position.set(11.5, 4.0, -10.38); scene.add(eqScr);
+  async function refreshEquity() {
+    try { const d = await fetch('/api/equity').then(r => r.json()); if (d && d.available) equityTex.update(d); } catch (e) { /* placeholder tetap tampil */ }
+  }
+  refreshEquity(); setInterval(refreshEquity, 300000);
+
+  /* ---------- monitor showcase: kode + chart ---------- */
+  function codeTexture() {
+    const cv = document.createElement('canvas'); cv.width = 512; cv.height = 320; const g = cv.getContext('2d');
+    const lines = ['const task = await agent.run(prompt);', 'if (task.status === "done") cheer();', 'ledger.append({ ts, task_id, status });', 'for (const pid of readdir("/proc")) {', '  rss += statm(pid).resident * PAGE;', '}', 'render(state.agents, state.queue);', 'socket.on("state", syncRobots);', 'const next = computeNext(schedule);', 'export default function Mission() {', '  return <Office agents={fleet} />;', '}', 'watchdog.check(tunnel.url);', 'await queue.push({ prompt, agent });', 'metrics.cpu = loadavg(); // nyata', 'tunnel.liveCheck() === 200;'];
+    const cols = ['#9ecbff', '#c3a6ff', '#7ee0a3', '#e8e8e8', '#f2b26b'];
+    let off = 0;
+    const tex = new THREE.CanvasTexture(cv);
+    return { tex, update() { g.fillStyle = '#0d1117'; g.fillRect(0, 0, 512, 320); g.font = '15px Menlo, monospace';
+      for (let i = 0; i < 15; i++) { const L = lines[(i + off) % lines.length]; g.fillStyle = cols[(i + off) % cols.length]; g.fillText(L, 16, 30 + i * 20); }
+      off = (off + 1) % lines.length; tex.needsUpdate = true; } };
+  }
+  function chartTexture() {
+    const cv = document.createElement('canvas'); cv.width = 512; cv.height = 320; const g = cv.getContext('2d');
+    const pts = Array.from({ length: 40 }, (_, i) => 150 + Math.sin(i * 0.4) * 45);
+    const tex = new THREE.CanvasTexture(cv);
+    return { tex, update(t) { g.fillStyle = '#0d1117'; g.fillRect(0, 0, 512, 320);
+      g.strokeStyle = '#232830'; for (let y = 40; y < 320; y += 40) { g.beginPath(); g.moveTo(0, y); g.lineTo(512, y); g.stroke(); }
+      pts.shift(); pts.push(150 + Math.sin(t * 0.0016) * 60 + Math.sin(t * 0.006) * 18);
+      g.strokeStyle = '#5b9bd5'; g.lineWidth = 3; g.beginPath();
+      pts.forEach((p, i) => i ? g.lineTo(i * 13, p) : g.moveTo(0, p)); g.stroke(); g.lineWidth = 1;
+      g.fillStyle = '#a1a1aa'; g.font = '14px Menlo, monospace'; g.fillText('CPU / aktivitas — live dari status robot', 16, 24);
+      tex.needsUpdate = true; } };
+  }
+  const codeTex = codeTexture(), chartTex = chartTexture();
+  function showcaseMonitor(texObj, x, angle) {
+    const g = new THREE.Group();
+    g.add(box(2.5, 1.55, 0.09, 0x0b0b0d, 0, 1.62, 0));
+    const scr = new THREE.Mesh(new THREE.PlaneGeometry(2.34, 1.4), new THREE.MeshBasicMaterial({ map: texObj.tex }));
+    scr.position.set(0, 1.62, 0.055); g.add(scr);
+    g.add(box(0.12, 0.85, 0.12, 0x23252a, 0, 0.45, 0)); g.add(box(0.7, 0.06, 0.4, 0x23252a, 0, 0.03, 0));
+    g.position.set(x, 0, 3.6); g.rotation.y = angle; scene.add(g);
+  }
+  showcaseMonitor(codeTex, -1.5, 0.1); showcaseMonitor(chartTex, 1.5, -0.1);
+  const frontDesk = box(6.4, 0.1, 1.1, 0x2b2e35, 0, 0.78, 3.6); scene.add(frontDesk);
+  [[-2.6, 3.6], [2.6, 3.6]].forEach(([x, z]) => { scene.add(box(0.09, 0.78, 0.9, 0x23252a, x, 0.39, z)); });
+  // lobi: meja rapat + meja resepsi
+  scene.add(box(4.6, 0.1, 1.7, 0x2b2e35, -9.5, 0.78, 6.2));
+  [[-11.6, 6.2], [-7.4, 6.2]].forEach(([x, z]) => { scene.add(box(0.1, 0.78, 1.4, 0x23252a, x, 0.39, z)); });
+  [[-11.2, 5.0], [-10.2, 5.0], [-8.8, 5.0], [-7.8, 5.0]].forEach(([x, z]) => {
+    scene.add(box(0.62, 0.08, 0.55, 0x33363e, x, 0.52, z)); scene.add(box(0.62, 0.72, 0.08, 0x33363e, x, 1.0, z - 0.3)); });
+  scene.add(box(4.2, 0.12, 1.0, 0x2f333b, 11.5, 0.95, 6.4));
+  scene.add(box(0.1, 0.95, 0.9, 0x23252a, 9.6, 0.48, 6.4)); scene.add(box(0.1, 0.95, 0.9, 0x23252a, 13.4, 0.48, 6.4));
+
+  /* ---------- zona tim: 6 pod, 1 pemimpin + 3 anak buah per pod ----------
+     Urutan pod mengikuti urutan roster server: anca, mu, cipu, jaka, tono, dani.
+     Di tiap pod: meja pemimpin di belakang, 3 meja anak buah di depannya. */
+  const TEAM_COLORS = { anca: 0x8b93a7, mu: 0x7c5cbf, cipu: 0xb3402f, jaka: 0x3e6b8f, tono: 0x4a7a57, dani: 0x4a5568 };
+  const PODS = [
+    { id: 'anca', x: -11, z: -6 }, { id: 'mu', x: 0, z: -6 }, { id: 'cipu', x: 11, z: -6 },
+    { id: 'jaka', x: -11, z: -0.5 }, { id: 'tono', x: 0, z: -0.5 }, { id: 'dani', x: 11, z: -0.5 },
+  ];
+  // posisi tiap karakter: seat (kursi), stand (titik berdiri saat idle), desk (meja)
+  const CHAR_POS = {};
+  /* Layar kerja per tim: tiap monitor menampilkan pekerjaan timnya sendiri
+     (coding untuk Dani, timeline video untuk Cipu, dsb), bukan lagi satu
+     layar kode yang sama untuk semua orang. */
+  function jobScreen(kind) {
+    const cv = document.createElement('canvas'); cv.width = 256; cv.height = 160; const g = cv.getContext('2d');
+    g.fillStyle = '#0d1117'; g.fillRect(0, 0, 256, 160);
+    g.textAlign = 'left';
+    if (kind === 'anca') { // PM: papan rencana
+      g.fillStyle = '#e8e8e8'; g.font = 'bold 15px Inter, sans-serif'; g.fillText('RENCANA TIM', 12, 22);
+      [['Rencana', '#8b93a7'], ['Jalan', '#c9a227'], ['Selesai', '#34c47c']].forEach((c, i) => {
+        const x = 12 + i * 80; g.fillStyle = c[1]; g.fillRect(x, 32, 70, 4);
+        g.fillStyle = '#1c1e24'; g.fillRect(x, 42, 70, 30); g.fillStyle = '#a1a1aa'; g.font = '10px Inter, sans-serif'; g.fillText(c[0], x + 6, 60);
+        g.fillStyle = '#232830'; g.fillRect(x, 78, 70, 26); g.fillStyle = '#e8e8e8'; g.fillText('Tugas', x + 6, 95);
+        g.fillStyle = '#232830'; g.fillRect(x, 110, 70, 26); g.fillStyle = '#8a8a92'; g.fillText('Berikutnya', x + 6, 127);
+      });
+    } else if (kind === 'tono') { // riset: dokumen + grafik
+      g.fillStyle = '#e8e8e8'; g.font = 'bold 15px Inter, sans-serif'; g.fillText('RISET PASAR', 12, 22);
+      g.fillStyle = '#8a8a92'; g.font = '11px Inter, sans-serif';
+      ['Sumber A: laporan & data', 'Sumber B: perbandingan', 'Kesimpulan: ringkas & jelas'].forEach((t, i) => g.fillText('— ' + t, 12, 44 + i * 16));
+      [42, 66, 52, 80, 62].forEach((h, i) => { g.fillStyle = '#4a7a57'; g.fillRect(14 + i * 46, 140 - h, 30, h); });
+    } else if (kind === 'cipu') { // video: pratinjau + timeline
+      g.fillStyle = '#e8e8e8'; g.font = 'bold 15px Inter, sans-serif'; g.fillText('EDIT VIDEO', 12, 22);
+      g.fillStyle = '#3a2b28'; g.fillRect(12, 30, 232, 58); g.fillStyle = '#e8e8e8'; g.font = '20px Inter, sans-serif'; g.fillText('▶  EUR/USD • Ep 1', 22, 66);
+      [['#b3402f', 90], ['#c9a227', 60], ['#4a7a57', 110], ['#3e6b8f', 70]].forEach((c, i) => {
+        g.fillStyle = c[0]; g.fillRect(12, 96 + i * 14, c[1], 9);
+      });
+      g.fillStyle = '#fff'; g.fillRect(150, 92, 2, 56);
+    } else if (kind === 'mu') { // desain: kanvas + palet
+      g.fillStyle = '#e8e8e8'; g.font = 'bold 15px Inter, sans-serif'; g.fillText('DESAIN', 12, 22);
+      g.fillStyle = '#7c5cbf'; g.beginPath(); g.arc(70, 80, 30, 0, 7); g.fill();
+      g.fillStyle = '#c9a227'; g.fillRect(120, 50, 60, 60);
+      g.fillStyle = '#3e6b8f'; g.beginPath(); g.moveTo(200, 110); g.lineTo(230, 50); g.lineTo(244, 110); g.fill();
+      ['#b3402f', '#c9a227', '#4a7a57', '#3e6b8f', '#7c5cbf'].forEach((c, i) => { g.fillStyle = c; g.beginPath(); g.arc(24 + i * 26, 140, 9, 0, 7); g.fill(); });
+    } else if (kind === 'jaka') { // QC: daftar periksa
+      g.fillStyle = '#e8e8e8'; g.font = 'bold 15px Inter, sans-serif'; g.fillText('QC — DAFTAR PERIKSA', 12, 22);
+      [['Detail visual', true], ['Konsistensi', true], ['Audio & teks', true], ['Cek akhir', false]].forEach((r, i) => {
+        const y = 40 + i * 28; g.strokeStyle = '#8a8a92'; g.strokeRect(14, y, 16, 16);
+        g.fillStyle = r[1] ? '#34c47c' : '#8a8a92'; g.font = 'bold 14px Inter, sans-serif';
+        g.fillText(r[1] ? '✓' : '○', 16, y + 13);
+        g.fillStyle = '#e8e8e8'; g.font = '12px Inter, sans-serif'; g.fillText(r[0], 40, y + 13);
+      });
+    }
+    return new THREE.CanvasTexture(cv);
+  }
+  // panel depan tower PC gaya RTX: kipas + label + strip RGB
+  function rtxTexture() {
+    const cv = document.createElement('canvas'); cv.width = 128; cv.height = 256; const g = cv.getContext('2d');
+    g.fillStyle = '#101216'; g.fillRect(0, 0, 128, 256);
+    const grad = g.createLinearGradient(0, 0, 0, 256); grad.addColorStop(0, '#b3402f'); grad.addColorStop(0.5, '#7c5cbf'); grad.addColorStop(1, '#3e6b8f');
+    g.fillStyle = grad; g.fillRect(118, 8, 6, 240);
+    [70, 170].forEach(y => { g.strokeStyle = '#2a2d33'; g.lineWidth = 5; g.beginPath(); g.arc(58, y, 40, 0, 7); g.stroke();
+      g.strokeStyle = '#3a3e47'; g.lineWidth = 3;
+      for (let a = 0; a < 3; a++) { const t = a * 2.09; g.beginPath(); g.moveTo(58, y); g.lineTo(58 + Math.cos(t) * 32, y + Math.sin(t) * 32); g.stroke(); }
+      g.fillStyle = '#1c1e24'; g.beginPath(); g.arc(58, y, 10, 0, 7); g.fill(); });
+    g.fillStyle = '#fff'; g.font = 'bold 26px Inter, sans-serif'; g.textAlign = 'center'; g.fillText('RTX', 58, 240);
+    return new THREE.CanvasTexture(cv);
+  }
+  const rtxTex = rtxTexture();
+  const jobScreens = { anca: jobScreen('anca'), tono: jobScreen('tono'), dani: codeTex.tex, cipu: jobScreen('cipu'), mu: jobScreen('mu'), jaka: jobScreen('jaka') };
+  function deskSet(x, z, w, teamC, leader, teamId, display) {
+    scene.add(box(w, 0.09, 1.15, 0x2b2e35, x, 0.78, z));
+    scene.add(box(0.09, 0.78, 0.9, 0x22242a, x - w / 2 + 0.15, 0.39, z)); scene.add(box(0.09, 0.78, 0.9, 0x22242a, x + w / 2 - 0.15, 0.39, z));
+    scene.add(box(w, 0.06, 0.06, teamC, x, 0.83, z + 0.58)); // strip warna tim
+    const screenTex = jobScreens[teamId] || codeTex.tex;
+    if (display === 'laptop') {
+      // laptop gaming: layar pekerjaan timnya, strip RGB warna tim
+      const lg = new THREE.Group();
+      lg.add(box(0.9, 0.04, 0.6, 0x14161a, 0, 0.845, 0));
+      lg.add(box(0.84, 0.015, 0.5, 0x1c1e24, 0, 0.868, 0));
+      lg.add(box(0.86, 0.02, 0.02, teamC, 0, 0.85, 0.3));
+      const sg = new THREE.Group(); sg.position.set(0, 0.87, -0.28); sg.rotation.x = -0.25;
+      sg.add(box(0.86, 0.56, 0.03, 0x0b0b0d, 0, 0.28, 0));
+      const ls = new THREE.Mesh(new THREE.PlaneGeometry(0.8, 0.5), new THREE.MeshBasicMaterial({ map: screenTex })); ls.position.set(0, 0.28, 0.02); sg.add(ls);
+      lg.add(sg);
+      lg.position.set(x + 0.45, 0, z - 0.15); lg.rotation.y = 0.22; scene.add(lg);
+    } else {
+      // monitor desktop: besar untuk pemimpin & sebagian anak buah, sedang untuk sisanya
+      const mw = display === 'big' ? (leader ? 1.5 : 1.25) : 0.92, mh = mw * 0.6;
+      const my = 0.825 + (mh + 0.08) / 2 + 0.03, mBot = my - (mh + 0.08) / 2;
+      const standH = Math.max(0.2, mBot - 0.825 + 0.08);
+      const mg = new THREE.Group(); mg.add(box(mw + 0.08, mh + 0.08, 0.05, 0x0b0b0d, 0, my, 0));
+      const s = new THREE.Mesh(new THREE.PlaneGeometry(mw, mh), new THREE.MeshBasicMaterial({ map: screenTex })); s.position.set(0, my, 0.03); mg.add(s);
+      mg.add(box(0.07, standH, 0.07, 0x23252a, 0, 0.825 + standH / 2, 0));
+      if (display === 'big') mg.add(box(mw, 0.03, 0.02, teamC, 0, mBot - 0.015, 0.03)); // strip LED bawah layar besar
+      mg.position.set(x + 0.45, 0, z - 0.15); mg.rotation.y = 0.22; scene.add(mg);
+      // keyboard di depan monitor
+      scene.add(box(0.6, 0.03, 0.22, 0x1c1e24, x + 0.45, 0.845, z + 0.28));
+      // tower PC gaya RTX di atas meja, strip LED warna tim di atasnya
+      const tx = x - w / 2 + 0.32, th = leader ? 0.72 : 0.62;
+      scene.add(box(0.3, th, 0.6, 0x14161a, tx, 0.825 + th / 2, z - 0.15));
+      const front = new THREE.Mesh(new THREE.PlaneGeometry(0.24, th - 0.08), new THREE.MeshBasicMaterial({ map: rtxTex }));
+      front.position.set(tx, 0.825 + th / 2, z - 0.15 + 0.31); scene.add(front);
+      scene.add(box(0.26, 0.03, 0.02, teamC, tx, 0.825 + th - 0.02, z - 0.15 + 0.31));
+    }
+    scene.add(box(0.62, 0.08, 0.55, 0x33363e, x, 0.52, z - 0.82));
+    scene.add(box(0.62, 0.72, 0.08, 0x33363e, x, 1.0, z - 1.12));
+    scene.add(cyl(0.05, 0.05, 0.5, 0x23252a, x, 0.26, z - 0.82));
+  }
+  PODS.forEach(pod => {
+    const teamC = TEAM_COLORS[pod.id];
+    // karpet zona tim (tipis, transparan, warna tim)
+    const rugPod = new THREE.Mesh(new THREE.PlaneGeometry(8.2, 5.6),
+      new THREE.MeshStandardMaterial({ color: teamC, roughness: 1, transparent: true, opacity: 0.13 }));
+    rugPod.rotation.x = -Math.PI / 2; rugPod.position.set(pod.x, 0.02, pod.z - 0.7); scene.add(rugPod);
+    deskSet(pod.x, pod.z - 1.3, 2.9, teamC, true, pod.id, 'big');
+    CHAR_POS[pod.id] = { seat: new THREE.Vector3(pod.x, 0, pod.z - 2.12), stand: new THREE.Vector3(pod.x + 1.35, 0, pod.z - 1.1), desk: new THREE.Vector3(pod.x, 0, pod.z - 1.3) };
+    [-2.3, 0, 2.3].forEach((dx, k) => {
+      const subId = pod.id + '-' + (k + 1);
+      deskSet(pod.x + dx, pod.z + 0.7, 2.2, teamC, false, pod.id, ['medium', 'laptop', 'big'][k]);
+      CHAR_POS[subId] = { seat: new THREE.Vector3(pod.x + dx, 0, pod.z - 0.12), stand: new THREE.Vector3(pod.x + dx + 1.05, 0, pod.z + 1.15), desk: new THREE.Vector3(pod.x + dx, 0, pod.z + 0.7) };
+    });
+  });
+  // sekat rendah antar kolom pod
+  [-5.5, 5.5].forEach(x => { scene.add(box(0.12, 1.1, 10, 0x2a2d33, x, 0.55, -3.2)); });
+
+  /* ---------- perabot lobi: jam WIB hidup, AC, dispenser, sofa, poster ----------
+     Jamnya BENAR-BENAR jalan (waktu WIB nyata, jarum bergerak tiap detik), AC
+     siripnya berayun, dispenser + galon cadangan di samping resepsi. */
+  function clockFaceTexture() {
+    const cv = document.createElement('canvas'); cv.width = 256; cv.height = 256; const g = cv.getContext('2d');
+    g.fillStyle = '#f2f0e8'; g.beginPath(); g.arc(128, 128, 126, 0, 7); g.fill();
+    g.fillStyle = '#1c1e24'; g.textAlign = 'center'; g.font = 'bold 26px Inter, sans-serif';
+    g.fillText('12', 128, 42); g.fillText('3', 216, 137); g.fillText('6', 128, 232); g.fillText('9', 40, 137);
+    for (let i = 0; i < 60; i++) { const a = i / 60 * Math.PI * 2, big = i % 5 === 0;
+      g.strokeStyle = '#1c1e24'; g.lineWidth = big ? 4 : 1.5; g.beginPath();
+      g.moveTo(128 + Math.sin(a) * (big ? 104 : 112), 128 - Math.cos(a) * (big ? 104 : 112));
+      g.lineTo(128 + Math.sin(a) * 118, 128 - Math.cos(a) * 118); g.stroke(); }
+    g.fillStyle = '#8a8a92'; g.font = '16px Inter, sans-serif'; g.fillText('WIB', 128, 168);
+    return cv;
+  }
+  const lobbyClock = { f: {}, b: {} };
+  (function wallClock() {
+    const faceCv = clockFaceTexture();
+    const faceTex = new THREE.CanvasTexture(faceCv);
+    const backTex = new THREE.CanvasTexture(faceCv); backTex.wrapS = THREE.RepeatWrapping; backTex.repeat.x = -1;
+    const g = new THREE.Group();
+    // jam dinding: menempel di tengah dinding belakang, di bawah papan nama
+    const head = new THREE.Group(); head.position.set(0, 2.0, -10.38); g.add(head);
+    const case_ = cyl(0.9, 0.9, 0.18, 0x14161a, 0, 0, 0); case_.rotation.x = Math.PI / 2; head.add(case_);
+    const faceF = new THREE.Mesh(new THREE.CircleGeometry(0.82, 32), new THREE.MeshBasicMaterial({ map: faceTex }));
+    faceF.position.z = 0.1; head.add(faceF);
+    const faceB = new THREE.Mesh(new THREE.CircleGeometry(0.82, 32), new THREE.MeshBasicMaterial({ map: backTex }));
+    faceB.position.z = -0.1; faceB.rotation.y = Math.PI; head.add(faceB);
+    function hands(z) {
+      const grp = new THREE.Group(); grp.position.z = z;
+      const h = new THREE.Group(), m = new THREE.Group(), s = new THREE.Group();
+      h.add(box(0.06, 0.45, 0.01, 0x1c1e24, 0, 0.18, 0));
+      m.add(box(0.04, 0.65, 0.01, 0x1c1e24, 0, 0.28, 0));
+      s.add(box(0.02, 0.7, 0.01, 0xe2543e, 0, 0.28, 0));
+      grp.add(h); grp.add(m); grp.add(s); head.add(grp);
+      return { h, m, s };
+    }
+    lobbyClock.f = hands(0.13); lobbyClock.b = hands(-0.13);
+    const dotF = sph(0.05, 0x1c1e24, 0, 0, 0.14); head.add(dotF);
+    const dotB = sph(0.05, 0x1c1e24, 0, 0, -0.14); head.add(dotB);
+    scene.add(g);
+  })();
+  const wibFmt = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Jakarta', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+  let lastClockSec = -1;
+  function updateLobbyClock() {
+    const p = {}; wibFmt.formatToParts(new Date()).forEach(o => { p[o.type] = o.value; });
+    const s = Number(p.second), m = Number(p.minute), h = Number(p.hour) % 24;
+    if (s === lastClockSec) return; lastClockSec = s;
+    const sa = s / 60 * Math.PI * 2, ma = (m + s / 60) / 60 * Math.PI * 2, ha = ((h % 12) + m / 60) / 12 * Math.PI * 2;
+    lobbyClock.f.h.rotation.z = -ha; lobbyClock.f.m.rotation.z = -ma; lobbyClock.f.s.rotation.z = -sa;
+    lobbyClock.b.h.rotation.z = ha; lobbyClock.b.m.rotation.z = ma; lobbyClock.b.s.rotation.z = sa;
+  }
+  /* ---------- kalender dinding: hari, tanggal, bulan, tahun + grid sebulan ----------
+     Menempel di dinding belakang di kiri jam, SEJAJAR dengan jam dan TIDAK
+     menutupi jendela (penempatan lama di x=-9 menumpuk jendela kota malam).
+     Datanya WAKTU WIB NYATA dan diperbarui otomatis tiap pergantian hari
+     (tanpa refresh halaman). */
+  const calFmtName = new Intl.DateTimeFormat('id-ID', { timeZone: 'Asia/Jakarta', weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  const calFmtNum = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Jakarta', day: '2-digit', month: '2-digit', year: 'numeric' });
+  function calParts() {
+    const n = {}; calFmtName.formatToParts(new Date()).forEach(o => { n[o.type] = o.value; });
+    const d = {}; calFmtNum.formatToParts(new Date()).forEach(o => { d[o.type] = o.value; });
+    return { weekday: n.weekday, day: Number(d.day), month: Number(d.month), monthName: n.month, year: Number(d.year) };
+  }
+  function isoWeek(y, m, d) {
+    const dt = new Date(Date.UTC(y, m - 1, d));
+    const day = (dt.getUTCDay() + 6) % 7;
+    dt.setUTCDate(dt.getUTCDate() - day + 3);
+    const firstThu = new Date(Date.UTC(dt.getUTCFullYear(), 0, 4));
+    const fday = (firstThu.getUTCDay() + 6) % 7; firstThu.setUTCDate(firstThu.getUTCDate() - fday + 3);
+    return 1 + Math.round((dt - firstThu) / (7 * 864e5));
+  }
+  const calCv = document.createElement('canvas'); calCv.width = 640; calCv.height = 640;
+  const calTex = new THREE.CanvasTexture(calCv);
+  const calTexBack = new THREE.CanvasTexture(calCv); calTexBack.wrapS = THREE.RepeatWrapping; calTexBack.repeat.x = -1;
+  function drawWallCalendar(p) {
+    const g = calCv.getContext('2d');
+    g.fillStyle = '#f2f0e8'; g.fillRect(0, 0, 640, 640);
+    g.fillStyle = '#14161a'; g.fillRect(0, 0, 640, 96);
+    g.fillStyle = '#ffffff'; g.textAlign = 'center'; g.font = 'bold 44px Inter, sans-serif';
+    g.fillText((p.monthName + ' ' + p.year).toUpperCase(), 320, 62);
+    g.fillStyle = '#b3402f'; g.font = 'bold 30px Inter, sans-serif';
+    const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
+    g.fillText(cap(p.weekday) + ', ' + p.day + ' ' + cap(p.monthName) + ' ' + p.year, 320, 152);
+    g.fillStyle = '#8a8a92'; g.font = 'bold 22px Inter, sans-serif';
+    ['SEN', 'SEL', 'RAB', 'KAM', 'JUM', 'SAB', 'MIN'].forEach((w, i) => g.fillText(w, 48 + i * 84 + 42, 200));
+    g.strokeStyle = '#d8d2c2'; g.lineWidth = 2; g.beginPath(); g.moveTo(28, 216); g.lineTo(612, 216); g.stroke();
+    const daysInMonth = new Date(p.year, p.month, 0).getDate();
+    const firstCol = (new Date(p.year, p.month - 1, 1).getDay() + 6) % 7;
+    g.font = '28px Inter, sans-serif';
+    for (let d = 1; d <= daysInMonth; d++) {
+      const cell = firstCol + d - 1, col = cell % 7, row = Math.floor(cell / 7);
+      const cx = 48 + col * 84 + 42, cy = 236 + row * 56 + 28;
+      if (d === p.day) {
+        g.fillStyle = '#e8a33d'; g.beginPath(); g.arc(cx, cy - 9, 26, 0, 7); g.fill();
+        g.fillStyle = '#14161a'; g.font = 'bold 28px Inter, sans-serif';
+      } else {
+        g.fillStyle = col === 6 ? '#b3402f' : '#1c1e24'; g.font = '28px Inter, sans-serif';
+      }
+      g.fillText(String(d), cx, cy);
+    }
+    const doy = Math.round((new Date(p.year, p.month - 1, p.day) - new Date(p.year, 0, 1)) / 864e5) + 1;
+    g.fillStyle = '#8a8a92'; g.font = '20px Inter, sans-serif';
+    g.fillText('Hari ke-' + doy + ' • Minggu ke-' + isoWeek(p.year, p.month, p.day) + ' • ' + p.year, 320, 608);
+    calTex.needsUpdate = true; calTexBack.needsUpdate = true;
+  }
+  (function wallCalendar() {
+    scene.add(box(3.35, 3.35, 0.08, 0x2a2d33, -3.4, 2.0, -10.44));
+    const f = new THREE.Mesh(new THREE.PlaneGeometry(3.2, 3.2), new THREE.MeshBasicMaterial({ map: calTex }));
+    f.position.set(-3.4, 2.0, -10.36); scene.add(f);
+    const b = new THREE.Mesh(new THREE.PlaneGeometry(3.2, 3.2), new THREE.MeshBasicMaterial({ map: calTexBack }));
+    b.position.set(-3.4, 2.0, -10.52); b.rotation.y = Math.PI; scene.add(b);
+  })();
+  let lastCalDay = '';
+  function updateWallCalendar() {
+    const p = calParts(), key = p.year + '-' + p.month + '-' + p.day;
+    if (key === lastCalDay) return; lastCalDay = key;
+    drawWallCalendar(p);
+    const el = document.getElementById('today-date');
+    if (el) { const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
+      el.textContent = '📅 ' + cap(p.weekday) + ', ' + p.day + ' ' + cap(p.monthName) + ' ' + p.year; }
+  }
+  updateWallCalendar();
+  // AC dinding di atas jendela & panel chart, siripnya berayun
+  const acFlaps = [];
+  [-11.5, 11.5].forEach(x => {
+    scene.add(box(3.2, 0.9, 0.35, 0xdfe3e8, x, 6.95, -10.2));
+    scene.add(box(2.8, 0.12, 0.05, 0x2a2d33, x, 6.62, -10.0));
+    const flap = box(2.6, 0.05, 0.28, 0x9aa2ad, x, 6.52, -9.98); scene.add(flap); acFlaps.push(flap);
+    scene.add(box(0.12, 0.05, 0.02, 0x34c47c, x + 1.35, 7.25, -10.0));
+  });
+  // dispenser air minum di samping resepsi + galon cadangan
+  scene.add(box(0.55, 1.05, 0.55, 0xdfe3e8, 8.6, 0.525, 6.4));
+  scene.add(box(0.4, 0.08, 0.4, 0x2a2d33, 8.6, 1.09, 6.4));
+  const galonMat = new THREE.MeshStandardMaterial({ color: 0x5b9bd5, transparent: true, opacity: 0.75, roughness: 0.2 });
+  const galon = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.24, 0.5, 20), galonMat); galon.position.set(8.6, 1.38, 6.4); scene.add(galon);
+  scene.add(cyl(0.08, 0.08, 0.1, 0x5b9bd5, 8.6, 1.66, 6.4));
+  scene.add(box(0.08, 0.12, 0.06, 0xe2543e, 8.48, 0.75, 6.7));
+  scene.add(box(0.08, 0.12, 0.06, 0x3e6b8f, 8.72, 0.75, 6.7));
+  scene.add(box(0.3, 0.03, 0.15, 0x2a2d33, 8.6, 0.62, 6.7));
+  const spareGalon = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.24, 0.5, 20), galonMat); spareGalon.position.set(7.9, 0.25, 6.4); scene.add(spareGalon);
+  // sofa + meja kopi + lampu di sudut lobi kanan
+  const sofaC = 0x44506a, sofaL = 0x55628a;
+  scene.add(box(0.95, 0.45, 2.3, sofaC, 15.55, 0.225, 5.5));
+  scene.add(box(0.28, 0.85, 2.3, sofaC, 15.95, 0.65, 5.5));
+  scene.add(box(0.95, 0.3, 0.28, sofaC, 15.55, 0.6, 4.5)); scene.add(box(0.95, 0.3, 0.28, sofaC, 15.55, 0.6, 6.5));
+  scene.add(box(0.8, 0.12, 1.0, sofaL, 15.5, 0.5, 5.0)); scene.add(box(0.8, 0.12, 1.0, sofaL, 15.5, 0.5, 6.0));
+  const rug2 = new THREE.Mesh(new THREE.PlaneGeometry(3.6, 3.0), mat(0x2e2620, { roughness: 1 })); rug2.rotation.x = -Math.PI / 2; rug2.position.set(14.9, 0.015, 5.5); scene.add(rug2);
+  scene.add(box(1.1, 0.06, 0.65, 0x2b2e35, 14.2, 0.42, 5.5));
+  scene.add(box(0.06, 0.42, 0.6, 0x23252a, 13.75, 0.21, 5.5)); scene.add(box(0.06, 0.42, 0.6, 0x23252a, 14.65, 0.21, 5.5));
+  scene.add(box(0.3, 0.04, 0.22, 0xb3402f, 14.2, 0.47, 5.5));
+  [[15.9, 4.0], [15.9, 7.0]].forEach(([x, z]) => {
+    scene.add(cyl(0.18, 0.2, 0.05, 0x2c2f36, x, 0.025, z));
+    scene.add(cyl(0.04, 0.04, 1.6, 0x2c2f36, x, 0.8, z));
+    const shade = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.34, 0.4, 20), new THREE.MeshBasicMaterial({ color: 0xf5d98a }));
+    shade.position.set(x, 1.8, z); scene.add(shade);
+  });
+  plant(14.6, 3.2, 0.9);
+  // poster motivasi di dinding samping
+  function posterTexture(word, bg, accent) {
+    const cv = document.createElement('canvas'); cv.width = 256; cv.height = 192; const g = cv.getContext('2d');
+    g.fillStyle = bg; g.fillRect(0, 0, 256, 192);
+    g.fillStyle = accent; g.beginPath(); g.arc(190, 50, 42, 0, 7); g.fill();
+    g.fillStyle = accent; g.fillRect(20, 130, 150, 12);
+    g.fillStyle = '#ffffff'; g.font = 'bold 44px Inter, sans-serif'; g.textAlign = 'left'; g.fillText(word, 20, 105);
+    return new THREE.CanvasTexture(cv);
+  }
+  [['FOKUS', '#3e6b8f', '#5b9bd5'], ['TIM', '#4a7a57', '#7ee0a3']].forEach(([w, bg, ac], i) => {
+    const z = 3.5 + i * 3;
+    scene.add(box(0.06, 1.7, 2.3, 0x2a2d33, -16.38, 3.4, z));
+    const p = new THREE.Mesh(new THREE.PlaneGeometry(2.14, 1.54), new THREE.MeshBasicMaterial({ map: posterTexture(w, bg, ac) }));
+    p.position.set(-16.34, 3.4, z); p.rotation.y = Math.PI / 2; scene.add(p);
+  });
+  [['PROSES', '#7c5cbf', '#c3a6ff'], ['HASIL', '#b3402f', '#f2b26b']].forEach(([w, bg, ac], i) => {
+    const z = 3.5 + i * 3;
+    scene.add(box(0.06, 1.7, 2.3, 0x2a2d33, 16.38, 3.4, z));
+    const p = new THREE.Mesh(new THREE.PlaneGeometry(2.14, 1.54), new THREE.MeshBasicMaterial({ map: posterTexture(w, bg, ac) }));
+    p.position.set(16.34, 3.4, z); p.rotation.y = -Math.PI / 2; scene.add(p);
+  });
+
+  /* ---------- robot ---------- */
+  function labelSprite(name, leader) {
+    const cv = document.createElement('canvas'); cv.width = 256; cv.height = 64; const g = cv.getContext('2d');
+    g.fillStyle = leader ? 'rgba(120,84,10,0.92)' : 'rgba(12,12,14,0.82)'; g.beginPath();
+    if (g.roundRect) g.roundRect(48, 8, 160, 46, 23); else g.rect(48, 8, 160, 46); g.fill();
+    g.fillStyle = '#fff'; g.font = 'bold 27px Inter, sans-serif'; g.textAlign = 'center'; g.fillText(leader ? '★ ' + name : name, 128, 40);
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(cv), transparent: true }));
+    sp.scale.set(1.5, 0.375, 1); sp.position.y = 2.28; return sp;
+  }
+  const robots = {}; // id -> record
+  function buildRobot(r) {
+    const g = new THREE.Group();
+    const bodyC = new THREE.Color(r.color), accC = r.accent;
+    const legs = {};
+    for (const side of [-1, 1]) {
+      const pivot = new THREE.Group(); pivot.position.set(side * 0.16, 0.56, 0);
+      const leg = box(0.17, 0.5, 0.2, 0x2c2f36, 0, -0.26, 0); pivot.add(leg);
+      const foot = box(0.2, 0.07, 0.3, 0x17181c, 0, -0.52, 0.05); pivot.add(foot);
+      g.add(pivot); legs[side < 0 ? 'L' : 'R'] = pivot;
+    }
+    const body = box(0.72, 0.78, 0.44, r.color, 0, 0.98, 0, { roughness: 0.6 }); g.add(body);
+    g.add(box(0.5, 0.34, 0.03, 0x101216, 0, 1.02, 0.23));
+    const lampMat = new THREE.MeshStandardMaterial({ color: 0x39404c, emissive: 0x0a0a0a, roughness: 0.35 });
+    const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.05, 12, 10), lampMat); lamp.position.set(0, 1.22, 0.24); g.add(lamp);
+    const arms = {};
+    for (const side of [-1, 1]) {
+      const pivot = new THREE.Group(); pivot.position.set(side * 0.44, 1.3, 0);
+      pivot.add(box(0.15, 0.52, 0.17, r.color, 0, -0.26, 0, { roughness: 0.6 }));
+      const hand = sph(0.085, 0xd8dbe2, 0, -0.55, 0); pivot.add(hand);
+      g.add(pivot); arms[side < 0 ? 'L' : 'R'] = pivot;
+    }
+    const headG = new THREE.Group(); headG.position.set(0, 1.62, 0);
+    headG.add(box(0.62, 0.52, 0.52, 0xd8dbe2, 0, 0, 0, { roughness: 0.45 }));
+    headG.add(box(0.64, 0.1, 0.54, r.color, 0, 0.26, 0));
+    const eyes = {};
+    for (const side of [-1, 1]) {
+      const eg = new THREE.Group(); eg.position.set(side * 0.15, 0.03, 0.27);
+      eg.add(sph(0.075, 0xffffff, 0, 0, 0)); const pup = sph(0.038, 0x14161a, 0, 0, 0.055); eg.add(pup);
+      headG.add(eg); eyes[side < 0 ? 'L' : 'R'] = eg;
+    }
+    g.add(headG);
+    let recMat = null;
+    // aksesori per peran
+    if (r.id === 'anca') { const ant = cyl(0.015, 0.015, 0.3, 0x8b93a7, 0.2, 0.48, 0); headG.add(ant); headG.add(sph(0.045, accC, 0.2, 0.64, 0));
+      g.add(box(0.16, 0.2, 0.02, 0xe8a33d, 0.18, 1.14, 0.235)); }
+    if (r.id === 'mu') { const beret = cyl(0.37, 0.37, 0.09, 0x7c5cbf, 0.03, 0.34, 0); beret.rotation.z = 0.16; headG.add(beret); headG.add(cyl(0.03, 0.03, 0.08, 0x7c5cbf, 0.03, 0.42, 0));
+      const tab = box(0.44, 0.04, 0.32, 0x1c1c22, 0, -0.58, 0.18); arms.L.add(tab);
+      const sty = cyl(0.018, 0.018, 0.24, 0xe8e8e8, 0, -0.56, 0.14); sty.rotation.x = 0.7; arms.R.add(sty); }
+    if (r.id === 'cipu') { const band = new THREE.Mesh(new THREE.TorusGeometry(0.34, 0.045, 10, 24), mat(0x232327)); band.position.y = 0.06; headG.add(band);
+      for (const side of [-1, 1]) { const cup = cyl(0.1, 0.1, 0.09, 0xb3402f, side * 0.33, 0, 0); cup.rotation.z = Math.PI / 2; headG.add(cup); }
+      recMat = new THREE.MeshStandardMaterial({ color: 0xe2543e, emissive: 0xe2543e, emissiveIntensity: 1 });
+      const rec = new THREE.Mesh(new THREE.SphereGeometry(0.045, 10, 8), recMat); rec.position.set(-0.18, 1.22, 0.24); g.add(rec); }
+    if (r.id === 'jaka') { const lens = cyl(0.115, 0.13, 0.12, 0x14161a, 0.15, 0.03, 0.3); lens.rotation.x = Math.PI / 2; headG.add(lens);
+      const glass = sph(0.05, 0x5b9bd5, 0.15, 0.03, 0.37, { roughness: 0.15 }); headG.add(glass); eyes.R.visible = false; }
+    if (r.id === 'tono') { const ant = cyl(0.015, 0.015, 0.52, 0x8b93a7, -0.18, 0.55, 0); headG.add(ant); headG.add(sph(0.05, accC, -0.18, 0.84, 0));
+      const mg = new THREE.Group(); const ring = new THREE.Mesh(new THREE.TorusGeometry(0.11, 0.02, 8, 20), mat(0xc7ccd8)); mg.add(ring);
+      const glass = new THREE.Mesh(new THREE.CircleGeometry(0.1, 20), new THREE.MeshBasicMaterial({ color: 0xbcd6ff, transparent: true, opacity: 0.35 })); mg.add(glass);
+      const handle = cyl(0.018, 0.018, 0.18, 0x8b5a2b, 0, -0.18, 0); mg.add(handle); mg.position.set(0, -0.6, 0.2); arms.R.add(mg); }
+    if (r.id === 'dani') { const kb = box(0.6, 0.045, 0.22, 0x17181c, 0, 1.0, 0.38); kb.rotation.x = 0.25; g.add(kb);
+      for (let i = 0; i < 5; i++) for (let j = 0; j < 12; j++) g.add(box(0.035, 0.012, 0.03, 0x3a3f47, -0.26 + j * 0.047, 1.035, 0.31 + i * 0.04)); }
+    // pemimpin (bos tim): badan lebih besar + epolet emas + strip dada emas + label bintang
+    // anak buah: badan sedikit lebih kecil + pita kepala warna timnya
+    if (r.id.includes('-')) { g.scale.setScalar(0.85); headG.add(box(0.66, 0.07, 0.56, r.accent, 0, 0.29, 0)); }
+    else {
+      g.scale.setScalar(1.15);
+      g.add(box(0.22, 0.07, 0.26, 0xe8a33d, -0.46, 1.42, 0));
+      g.add(box(0.22, 0.07, 0.26, 0xe8a33d, 0.46, 1.42, 0));
+      g.add(box(0.74, 0.1, 0.02, 0xe8a33d, 0, 1.28, 0.25));
+    }
+    g.add(labelSprite(r.name, !r.id.includes('-')));
+    // gelembung bicara (disembunyikan dulu, dimunculkan saat ngobrol)
+    const spCv = document.createElement('canvas'); spCv.width = 320; spCv.height = 160;
+    const spTex = new THREE.CanvasTexture(spCv);
+    const speechSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: spTex, transparent: true }));
+    speechSprite.scale.set(2.0, 1.0, 1); speechSprite.position.y = 3.05; speechSprite.visible = false;
+    g.add(speechSprite);
+    // tanda tidur "Z z z" (disembunyikan dulu, muncul saat idle)
+    const zzCv = document.createElement('canvas'); zzCv.width = 128; zzCv.height = 128;
+    const zzCtx = zzCv.getContext('2d'); zzCtx.textAlign = 'center'; zzCtx.fillStyle = '#8fc1ff';
+    zzCtx.font = 'bold 44px Inter, sans-serif'; zzCtx.fillText('Z', 34, 108);
+    zzCtx.font = 'bold 36px Inter, sans-serif'; zzCtx.fillText('z', 64, 76);
+    zzCtx.font = 'bold 28px Inter, sans-serif'; zzCtx.fillText('z', 92, 48);
+    const zzzSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(zzCv), transparent: true, opacity: 0.9 }));
+    zzzSprite.scale.set(0.9, 0.9, 1); zzzSprite.position.y = 2.6; zzzSprite.visible = false;
+    g.add(zzzSprite);
+    g.traverse(o => { o.userData.agentRoot = r.id; });
+    scene.add(g);
+    return { id: r.id, group: g, headG, eyes, arms, legs, lampMat, recMat, status: 'idle', paused: false,
+      target: new THREE.Vector3(), base: new THREE.Vector3(), phase: Math.random() * 6.28, blinkAt: 1500 + Math.random() * 2500, blinkT: 0, hopUntil: 0, seated: false,
+      speechSprite, speechCanvas: spCv, speechCtx: spCv.getContext('2d'), speechTex: spTex, zzzSprite };
+  }
+
+  /* ---------- sinkronisasi status: 24 karakter ---------- */
+  let knownDone = null;
+  // area istirahat di lobi depan: 2 baris x 12 karakter
+  const pausePos = i => new THREE.Vector3(-13.75 + (i % 12) * 2.5, 0, 8.6 + Math.floor(i / 12) * 1.9);
+  function syncAgents(agents, tasks) {
+    if (!agents) return;
+    if (knownDone === null) { knownDone = new Set((tasks || []).filter(t => t.status === 'done').map(t => t.task_id)); }
+    else for (const t of (tasks || [])) if (t.status === 'done' && t.task_id && !knownDone.has(t.task_id)) {
+      knownDone.add(t.task_id);
+      if (robots[t.agent]) robots[t.agent].hopUntil = performance.now() + 1300;
+      if (t.subagent && robots[t.subagent]) robots[t.subagent].hopUntil = performance.now() + 1300;
+    }
+    let gi = 0; let anyWork = false, anyPause = false;
+    const place = char => {
+      if (!CHAR_POS[char.id]) return;
+      if (!robots[char.id]) robots[char.id] = buildRobot(char);
+      const rb = robots[char.id], pos = CHAR_POS[char.id];
+      rb.status = char.status; rb.paused = char.paused;
+      // kerja maupun idle sama-sama duduk di meja sendiri; hanya pause yang ke lobi
+      rb.target.copy(char.status === 'paused' ? pausePos(gi) : pos.seat);
+      rb.seated = char.status !== 'paused';
+      rb.lampMat.color.set(char.status === 'working' ? 0x34c47c : char.status === 'paused' ? 0xe5a83d : 0x39404c);
+      rb.lampMat.emissive.set(char.status === 'working' ? 0x1d7a4a : char.status === 'paused' ? 0x8a5f14 : 0x0a0a0a);
+      if (char.status === 'working') anyWork = true;
+      if (char.status === 'paused') anyPause = true;
+      gi++;
+    };
+    agents.forEach(a => { place(a); (a.subordinates || []).forEach(place); });
+    // lampu status ruangan
+    statusLampMat.color.set(anyWork ? 0x34c47c : anyPause ? 0xe5a83d : 0x39404c);
+    statusLampMat.emissive.set(anyWork ? 0x1d7a4a : anyPause ? 0x8a5f14 : 0x111111);
+  }
+
+  /* ---------- kamera orbit manual ---------- */
+  const orbit = { theta: 0, phi: 1.02, radius: 19.5, tx: 0, ty: 1.2, tz: -2.8 };
+  function applyCam() {
+    camera.position.set(
+      orbit.tx + orbit.radius * Math.sin(orbit.phi) * Math.sin(orbit.theta),
+      orbit.ty + orbit.radius * Math.cos(orbit.phi),
+      orbit.tz + orbit.radius * Math.sin(orbit.phi) * Math.cos(orbit.theta));
+    camera.lookAt(orbit.tx, orbit.ty, orbit.tz);
+  }
+  const el = renderer.domElement;
+  let drag = null, downPos = null, pinch = 0;
+  el.addEventListener('pointerdown', e => { drag = { x: e.clientX, y: e.clientY }; downPos = { x: e.clientX, y: e.clientY }; el.setPointerCapture(e.pointerId); });
+  el.addEventListener('pointermove', e => {
+    if (!drag) return;
+    orbit.theta -= (e.clientX - drag.x) * 0.0052;
+    orbit.phi = Math.min(1.38, Math.max(0.35, orbit.phi - (e.clientY - drag.y) * 0.004));
+    drag = { x: e.clientX, y: e.clientY };
+  });
+  el.addEventListener('pointerup', e => {
+    const moved = downPos ? Math.hypot(e.clientX - downPos.x, e.clientY - downPos.y) : 99;
+    drag = null;
+    if (moved < 6) pick(e);
+  });
+  el.addEventListener('wheel', e => { e.preventDefault(); orbit.radius = Math.min(30, Math.max(7, orbit.radius + e.deltaY * 0.01)); }, { passive: false });
+  el.addEventListener('touchmove', e => {
+    if (e.touches.length === 2) { const d = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+      if (pinch) orbit.radius = Math.min(30, Math.max(7, orbit.radius - (d - pinch) * 0.02)); pinch = d; }
+  }, { passive: true });
+  el.addEventListener('touchend', () => { pinch = 0; });
+  const ray = new THREE.Raycaster(), mouse = new THREE.Vector2();
+  function pick(e) {
+    const rect = el.getBoundingClientRect();
+    mouse.set(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1);
+    ray.setFromCamera(mouse, camera);
+    const hits = ray.intersectObjects(scene.children, true);
+    for (const h of hits) { const id = h.object.userData.agentRoot; if (id && robots[id]) { if (id.includes('-')) return; window.toggleAgentPause(id, !robots[id].paused); return; } }
+  }
+
+  /* ---------- obrolan antar karakter (hiasan, bukan data tugas) ---------- */
+  const SPEAK_LINES = ['Semangat, tim!', 'Fokus, satu tugas lagi.', 'Kopi dulu, yuk?', 'Sudah dicek ulang?', 'Lanjut, jangan berhenti.', 'Siap, Bos!', 'Kerja bagus, tim!', 'Santai tapi jalan terus.'];
+  const REPLY_LINES = ['Siap!', 'Oke!', 'Gas!', 'Setuju!', 'Yuk, lanjut!', 'Siap, laksanakan!', 'Ayo!', 'Beres, lanjut!'];
+  const speech = { nextAt: 5000, until: 0, phase: -1, speaker: null, listener: null };
+  function drawSpeech(rb, text) {
+    const c = rb.speechCtx;
+    c.clearRect(0, 0, 320, 160);
+    c.fillStyle = 'rgba(255,255,255,0.95)';
+    c.beginPath();
+    if (c.roundRect) c.roundRect(10, 8, 300, 118, 22); else c.rect(10, 8, 300, 118);
+    c.fill();
+    c.beginPath(); c.moveTo(140, 126); c.lineTo(170, 152); c.lineTo(190, 126); c.closePath(); c.fill();
+    c.fillStyle = '#111'; c.font = 'bold 26px Inter, sans-serif'; c.textAlign = 'center';
+    const words = text.split(' '), lines = []; let cur = '';
+    for (const w of words) { const test = cur ? cur + ' ' + w : w; if (c.measureText(test).width > 260 && cur) { lines.push(cur); cur = w; } else cur = test; }
+    if (cur) lines.push(cur);
+    lines.slice(0, 2).forEach((ln, i) => c.fillText(ln, 160, 58 + i * 32));
+    rb.speechTex.needsUpdate = true;
+  }
+  function pickSpeechPair() {
+    const byPod = {};
+    for (const id in robots) {
+      const rb = robots[id];
+      if (rb.status === 'working' || rb.status === 'paused') {
+        const pod = id.includes('-') ? id.split('-')[0] : id;
+        (byPod[pod] = byPod[pod] || []).push(rb);
+      }
+    }
+    const pods = Object.values(byPod).filter(a => a.length >= 2);
+    if (!pods.length) return null;
+    const arr = pods[Math.floor(Math.random() * pods.length)];
+    const s = arr[Math.floor(Math.random() * arr.length)];
+    let l = arr[Math.floor(Math.random() * arr.length)];
+    if (l === s) l = arr[(arr.indexOf(s) + 1) % arr.length];
+    return [s, l];
+  }
+
+  /* ---------- loop ---------- */
+  function resize() {
+    const w = wrap.clientWidth, h = wrap.clientHeight;
+    if (!w || !h) return;
+    renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix();
+  }
+  window.addEventListener('resize', resize); resize(); applyCam();
+  let lastTex = 0, lastW = 0, lastH = 0;
+  function loop(t) {
+    requestAnimationFrame(loop);
+    // jaga-jaga: bila ukuran wadah berubah (ganti view, rotasi HP), sesuaikan renderer
+    if (wrap.clientWidth && (wrap.clientWidth !== lastW || wrap.clientHeight !== lastH)) {
+      lastW = wrap.clientWidth; lastH = wrap.clientHeight; resize();
+    }
+    if (t - lastTex > 220) { codeTex.update(); chartTex.update(t); lastTex = t; }
+    // jam WIB + kalender WIB + sirip AC bergerak
+    updateLobbyClock(); updateWallCalendar();
+    acFlaps.forEach((f, i) => { f.rotation.x = 0.35 + Math.sin(t * 0.0015 + i * 1.7) * 0.3; });
+    // giliran ngobrol: pembicara 3,5 detik, lalu dibalas 3,5 detik, lalu jeda 7-15 detik
+    if (speech.phase === -1 && t > speech.nextAt) {
+      const pair = pickSpeechPair();
+      if (pair) {
+        [speech.speaker, speech.listener] = pair;
+        drawSpeech(speech.speaker, SPEAK_LINES[Math.floor(Math.random() * SPEAK_LINES.length)]);
+        speech.speaker.speechSprite.visible = true; speech.phase = 0; speech.until = t + 3500;
+      } else speech.nextAt = t + 5000;
+    } else if (speech.phase === 0 && t > speech.until) {
+      speech.speaker.speechSprite.visible = false;
+      drawSpeech(speech.listener, REPLY_LINES[Math.floor(Math.random() * REPLY_LINES.length)]);
+      speech.listener.speechSprite.visible = true; speech.phase = 1; speech.until = t + 3500;
+    } else if (speech.phase === 1 && t > speech.until) {
+      speech.listener.speechSprite.visible = false; speech.phase = -1; speech.nextAt = t + 7000 + Math.random() * 8000;
+    }
+    for (const id in robots) {
+      const rb = robots[id], g = rb.group;
+      // posisi dasar berjalan menuju target; posisi tampil = dasar + patroli (khusus idle)
+      rb.base.lerp(rb.target, 0.055);
+      const dist = rb.base.distanceTo(rb.target);
+      let hop = 0;
+      if (t < rb.hopUntil) hop = Math.abs(Math.sin((rb.hopUntil - t) * 0.012)) * 0.35;
+      const seatedNow = rb.seated && dist < 0.4;
+      const walking = dist > 0.5 && !seatedNow;
+      const parent = id.includes('-') ? id.split('-')[0] : id;
+      if (rb.status !== 'idle') rb.headG.rotation.x = 0;
+      if (rb.status === 'idle') rb.speechSprite.visible = false;
+      g.position.set(rb.base.x,
+        (seatedNow ? -0.18 : 0) + hop + (walking ? Math.abs(Math.sin(t * 0.014 + rb.phase)) * 0.06 : 0)
+        + (rb.status === 'idle' ? Math.sin(t * 0.0011 + rb.phase) * 0.03 : 0),
+        rb.base.z);
+      g.rotation.z = rb.status === 'idle' ? Math.sin(t * 0.0012 + rb.phase) * 0.05 : 0;
+      // saat berjalan ke meja/lobi, hadap tujuan; saat diam, menoleh
+      g.rotation.y = walking ? Math.atan2(rb.target.x - rb.base.x, rb.target.z - rb.base.z)
+        : rb.status === 'paused' ? 0.5 : Math.sin(t * 0.0006 + rb.phase) * 0.05;
+      if (walking) {
+        rb.legs.L.rotation.x = Math.sin(t * 0.014 + rb.phase) * 0.75;
+        rb.legs.R.rotation.x = Math.sin(t * 0.014 + rb.phase + Math.PI) * 0.75;
+        rb.arms.L.rotation.x = Math.sin(t * 0.014 + rb.phase + Math.PI) * 0.4;
+        rb.arms.R.rotation.x = Math.sin(t * 0.014 + rb.phase) * 0.4;
+        rb.headG.rotation.y = 0; rb.headG.rotation.z = 0;
+      } else if (seatedNow) { rb.legs.L.rotation.x = -1.35; rb.legs.R.rotation.x = -1.35; }
+      else { rb.legs.L.rotation.x = 0; rb.legs.R.rotation.x = 0; }
+      // gerak lengan per status/peran (anak buah ikut gaya pemimpin timnya) — ayunan diperbesar
+      if (rb.status === 'working' && seatedNow) {
+        const sp = parent === 'dani' ? 0.021 : 0.011;
+        rb.arms.L.rotation.x = -0.85 + Math.sin(t * sp + rb.phase) * 0.35;
+        rb.arms.R.rotation.x = -0.85 + Math.sin(t * sp * 1.13 + rb.phase + 2) * 0.35;
+        if (parent === 'mu') rb.arms.R.rotation.z = Math.sin(t * 0.004) * 0.3;
+        if (parent === 'cipu') rb.headG.rotation.z = Math.sin(t * 0.003) * 0.06;
+        if (parent === 'tono') rb.headG.rotation.y = Math.sin(t * 0.0018) * 0.3;
+      } else if (rb.status === 'paused') { rb.arms.L.rotation.x = 0.15; rb.arms.R.rotation.x = 0.15; rb.headG.rotation.z = 0.08; }
+      else if (rb.status === 'idle') { rb.arms.L.rotation.x = 0.1; rb.arms.R.rotation.x = 0.1; rb.headG.rotation.x = 0.3; rb.headG.rotation.z = 0.12; rb.headG.rotation.y = 0; }
+      else if (!walking) { rb.arms.L.rotation.x = Math.sin(t * 0.0016 + rb.phase) * 0.06; rb.arms.R.rotation.x = Math.sin(t * 0.0016 + rb.phase + 3) * 0.06; rb.headG.rotation.z = 0; rb.headG.rotation.y = Math.sin(t * 0.0009 + rb.phase) * 0.5; }
+      if (rb.recMat) rb.recMat.emissiveIntensity = (Math.sin(t * 0.006) > 0) ? 1.4 : 0.15;
+      // kedip (tidur: mata selalu merem + Zzz melayang naik-turun)
+      if (t > rb.blinkAt) { rb.blinkT = t; rb.blinkAt = t + 1800 + Math.random() * 2800; }
+      const blinking = t - rb.blinkT < 130;
+      rb.eyes.L.scale.y = rb.eyes.R.scale.y = blinking ? 0.12 : 1;
+      rb.zzzSprite.visible = rb.status === 'idle';
+      if (rb.zzzSprite.visible) rb.zzzSprite.position.y = 2.6 + Math.sin(t * 0.0012 + rb.phase) * 0.18;
+      if (rb.status === 'idle') rb.eyes.L.scale.y = rb.eyes.R.scale.y = 0.12;
+    }
+    applyCam();
+    if (wrap.clientWidth) { renderer.render(scene, camera); window.__officeBooted = true; }
+  }
+  requestAnimationFrame(loop);
+  return { resize, syncAgents };
+})();
+</script>
+</body>
+</html>

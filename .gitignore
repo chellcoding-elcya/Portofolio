@@ -1,0 +1,16 @@
+# Jangan pernah push data nyata / secret ke repo publik ini
+data/
+*.log
+*.pid
+*.jsonl
+PUBLIC_URL.txt
+webhook-token.txt
+*token*.txt
+*.xlsx
+*.xls
+.env
+.env.*
+state/
+__pycache__/
+*.pyc
+vendor/
