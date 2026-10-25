@@ -112,6 +112,14 @@
   .ai-req span{display:block; color:var(--muted); font-size:12.5px; margin-top:2px}
   #ai-detail h3{color:var(--aiblue2); margin-top:0}
   #ai-graph svg{width:100%; height:auto; display:block}
+  .belajar-item{display:flex; gap:14px; align-items:flex-start; padding:14px 16px; border:1px solid #2a2a2e; border-radius:12px; margin-bottom:10px; background:#161618; cursor:pointer}
+  .belajar-item input{width:26px; height:26px; margin-top:2px; flex-shrink:0; accent-color:#3b82f6}
+  .belajar-item b{display:block; font-size:16px}
+  .belajar-item span{color:var(--muted); font-size:13px}
+  .belajar-item.done{border-color:#3b82f6}
+  .belajar-item.done b{text-decoration:line-through; opacity:.7}
+  .belajar-progress{height:12px; background:#26262b; border-radius:99px; overflow:hidden; margin:10px 0}
+  .belajar-progress div{height:100%; background:#3b82f6; width:0%; transition:width .2s}
   #ai-graph .ai-branch{stroke:#3b82f6; stroke-width:2.5; stroke-dasharray:7 6; animation:ai-flow 1.1s linear infinite}
   #ai-graph .ai-branch.off{stroke:#55555e; stroke-dasharray:3 6; animation:none}
   #ai-graph .ai-node-svg{cursor:pointer}
@@ -225,6 +233,28 @@
       <div class="card" id="ai-detail"></div>
       <p class="tiny" style="margin-top:12px">Ketuk menu, provider, atau baris permintaan di atas untuk melihat detailnya. Yang abu-abu ditampilkan apa adanya, bukan dibuat seolah terhubung.</p>
     </section>
+    <section class="view" id="view-belajar">
+      <div class="card" style="margin-bottom:14px">
+        <h2>Jadwal Belajar Bos Archell</h2>
+        <p>Mulai <b>Senin, 26 Oktober 2026</b> — 6 bulan, sampai April 2027. Satu jalur, satu project per bulan. Kalau target belum selesai, berhenti di batas waktu, tulis bookmark satu kalimat, lanjut besok.</p>
+        <p><b>Malam (utama) 19:00–20:30:</b> coding 45 menit, matematika 25 menit, Inggris 20 menit.<br><b>Pagi (opsional) 04:00–04:30:</b> review saja, bukan belajar berat baru.<br><b>Tidur:</b> jam 21:00 kalau bangun 04:00 (7 jam). Kalau tidak bisa tidur 21:00, skip sesi pagi.</p>
+      </div>
+      <div class="card" style="margin-bottom:14px">
+        <h3>Checklist hari ini — <span id="belajar-date"></span></h3>
+        <label style="display:block; margin-bottom:10px">Pilih tanggal: <input type="date" id="belajar-pick" style="font-size:16px; padding:6px"></label>
+        <div id="belajar-list"></div>
+        <div class="belajar-progress"><div id="belajar-bar"></div></div>
+        <p id="belajar-progress-text"></p>
+        <p>Streak dihitung dari hari-hari yang 3 item utamanya (coding, matematika, Inggris) semua tercentang. Centang tersimpan otomatis di browser ini.</p>
+        <p><b>Streak beruntun: <span id="belajar-streak">0</span> hari</b> &nbsp;|&nbsp; Total hari lengkap: <span id="belajar-total">0</span></p>
+        <p class="tiny">Catatan bookmark hari ini: <input type="text" id="belajar-note" placeholder="Berhenti di ..., besok lanjut dari ..." style="width:100%; font-size:15px; padding:8px; margin-top:6px"></p>
+      </div>
+      <div class="card">
+        <h3>Urutan 6 bulan</h3>
+        <p>Bulan 1 (Nov): Git + HTML/CSS + website portofolio.<br>Bulan 2 (Des): JavaScript lewat Mission Control.<br>Bulan 3 (Jan): Python lewat script jurnal &amp; news alerts.<br>Bulan 4 (Feb): AI coding (Gemini/Groq gratis, lalu Claude/Codex).<br>Bulan 5 (Mar): 1 project jasa UMKM.<br>Bulan 6 (Apr): Polish, testimoni, paket jasa, evaluasi.</p>
+        <p>Matematika dari 0: tambah/kurang/kali/bagi, pecahan, persen, lalu variabel, logika, rata-rata &amp; peluang dasar.<br>Inggris dari 0: 10 kata teknologi per hari, baca README, tulis ulang dengan kata sendiri.</p>
+      </div>
+    </section>
   </div>
 </div>
 <script src="vendor/three.min.js"></script>
@@ -235,7 +265,7 @@ const NAV = [
   ['office','Virtual Office','🏢'], ['agents','Agent Overview','🤖'], ['portfolio','Portofolio Tim','📁'], ['queue','Task Queue','📥'],
   ['system','System Metrics','📊'], ['vps','VPS Status','🖥️'], ['schedules','Tugas Terjadwal','🗓️'],
   ['token','Token Status','🎟️'], ['fleet','Agent Fleet','🚀'], ['log','Real-Time Log','📜'],
-  ['ai','AI Partners','🔗'],
+  ['ai','AI Partners','🔗'], ['belajar','Jadwal Belajar','📚'],
 ];
 window.__officeBooted = false;
 window.addEventListener('error', e => {
@@ -1348,6 +1378,84 @@ window.Office3D = (function () {
   }
   fetchAI();
   setInterval(fetchAI, 3000);
+})();
+</script>
+<script>
+'use strict';
+(function () {
+  var ITEMS = [
+    {id: 'pagi', title: 'Pagi 04:00–04:30 — Review (opsional)', sub: 'Baca ulang materi kemarin saja. Boleh dilewat, tidak memutus streak.'},
+    {id: 'coding', title: 'Coding 45 menit', sub: 'Satu konsep saja. Ubah satu hal kecil sendiri, jangan cuma copy-paste.', main: true},
+    {id: 'math', title: 'Matematika 25 menit', sub: 'Dari 0: tambah, kurang, kali, bagi, pecahan, persen, lalu variabel dan logika.', main: true},
+    {id: 'english', title: 'Inggris 20 menit', sub: '10 kata teknologi + baca 1 paragraf README, tulis ulang dengan kata sendiri.', main: true},
+    {id: 'tidur', title: 'Tidur jam 21:00', sub: 'Wajib kalau besok bangun 04:00. Kalau tidak bisa tidur 21:00, skip sesi pagi.'}
+  ];
+  var KEY = 'belajar-checklist-v1';
+  function wibDate(d) {
+    try { return new Intl.DateTimeFormat('en-CA', {timeZone: 'Asia/Jakarta', year: 'numeric', month: '2-digit', day: '2-digit'}).format(d); }
+    catch (e) { return d.toISOString().slice(0, 10); }
+  }
+  function load() { try { return JSON.parse(localStorage.getItem(KEY) || '{}'); } catch (e) { return {}; } }
+  function save(data) { try { localStorage.setItem(KEY, JSON.stringify(data)); } catch (e) {} }
+  function isComplete(data, date) {
+    var day = data[date] || {};
+    return ITEMS.filter(function (i) { return i.main; }).every(function (i) { return !!day[i.id]; });
+  }
+  function streak(data, today) {
+    var count = 0, d = new Date(today + 'T12:00:00');
+    if (!isComplete(data, today)) d.setDate(d.getDate() - 1);
+    while (isComplete(data, wibDate(d))) { count++; d.setDate(d.getDate() - 1); }
+    return count;
+  }
+  function render() {
+    var pick = document.getElementById('belajar-pick');
+    if (!pick) return;
+    var date = pick.value || wibDate(new Date());
+    var data = load();
+    var day = data[date] || {};
+    var dateEl = document.getElementById('belajar-date');
+    if (dateEl) dateEl.textContent = date;
+    var list = document.getElementById('belajar-list');
+    list.innerHTML = '';
+    ITEMS.forEach(function (item) {
+      var label = document.createElement('label');
+      label.className = 'belajar-item' + (day[item.id] ? ' done' : '');
+      var cb = document.createElement('input');
+      cb.type = 'checkbox'; cb.checked = !!day[item.id];
+      cb.addEventListener('change', function () {
+        var cur = load(); cur[date] = cur[date] || {}; cur[date][item.id] = cb.checked; save(cur); render();
+      });
+      var txt = document.createElement('div');
+      var b = document.createElement('b'); b.textContent = item.title;
+      var s = document.createElement('span'); s.textContent = item.sub;
+      txt.appendChild(b); txt.appendChild(s);
+      label.appendChild(cb); label.appendChild(txt); list.appendChild(label);
+    });
+    var doneMain = ITEMS.filter(function (i) { return i.main && day[i.id]; }).length;
+    var bar = document.getElementById('belajar-bar');
+    if (bar) bar.style.width = Math.round(doneMain / 3 * 100) + '%';
+    var pt = document.getElementById('belajar-progress-text');
+    if (pt) pt.textContent = 'Item utama hari ini: ' + doneMain + ' dari 3 selesai.';
+    var total = Object.keys(data).filter(function (k) { return isComplete(data, k); }).length;
+    var st = document.getElementById('belajar-streak'); if (st) st.textContent = streak(data, wibDate(new Date()));
+    var tot = document.getElementById('belajar-total'); if (tot) tot.textContent = total;
+    var note = document.getElementById('belajar-note');
+    if (note) {
+      note.value = (data[date] && data[date].note) || '';
+      note.onchange = function () { var cur = load(); cur[date] = cur[date] || {}; cur[date].note = note.value; save(cur); };
+    }
+  }
+  document.addEventListener('DOMContentLoaded', function () {
+    var pick = document.getElementById('belajar-pick');
+    if (!pick) return;
+    pick.value = wibDate(new Date());
+    pick.addEventListener('change', render);
+    render();
+  });
+  if (document.readyState !== 'loading') {
+    var pick2 = document.getElementById('belajar-pick');
+    if (pick2 && !pick2.value) { pick2.value = wibDate(new Date()); pick2.addEventListener('change', render); render(); }
+  }
 })();
 </script>
 </body>
