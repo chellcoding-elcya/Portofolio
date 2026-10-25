@@ -20,7 +20,7 @@ const WORKSPACE = path.join(HOME, 'workspace');
 
 /* ------------------------------------------------------------------ roster */
 const ROSTER = [
-  { id: 'anca', name: 'Anca', role: 'Project Manager / General', color: '#8b93a7', accent: '#c7ccd8',
+  { id: 'anca', name: 'Elcya', role: 'Project Manager / General', color: '#8b93a7', accent: '#c7ccd8',
     capabilities: ['Koordinasi tugas', 'Perencanaan', 'Delegasi ke agent lain', 'Ringkasan & laporan'] },
   { id: 'mu', name: 'Mu', role: 'Graphic Designer', color: '#7c5cbf', accent: '#a78bfa',
     capabilities: ['Desain grafis', 'Ilustrasi', 'Branding', 'Layout'] },
@@ -39,9 +39,9 @@ const ROSTER_IDS = new Set(ROSTER.map(a => a.id));
  * id anak buah dipakai di field `subagent` ledger tasks.jsonl. */
 const SUBORDINATES = {
   anca: [
-    { id: 'anca-1', name: 'Anca-1', role: 'Perencana' },
-    { id: 'anca-2', name: 'Anca-2', role: 'Pencatat' },
-    { id: 'anca-3', name: 'Anca-3', role: 'Pemantau' },
+    { id: 'anca-1', name: 'Elcya-1', role: 'Perencana' },
+    { id: 'anca-2', name: 'Elcya-2', role: 'Pencatat' },
+    { id: 'anca-3', name: 'Elcya-3', role: 'Pemantau' },
   ],
   mu: [
     { id: 'mu-1', name: 'Mu-1', role: 'Konsep' },
@@ -530,6 +530,11 @@ const server = http.createServer((req, res) => {
     const eq = readJSON(path.join(DATA, 'metakit-equity.json'), null);
     if (!eq) return sendJSON(res, 200, { available: false });
     return sendJSON(res, 200, Object.assign({ available: true }, eq));
+  }
+  if (p === '/api/ai-partners' && req.method === 'GET') {
+    const ai = readJSON(path.join(DATA, 'ai-partners.json'), null);
+    if (!ai) return sendJSON(res, 200, { available: false });
+    return sendJSON(res, 200, Object.assign({ available: true }, ai));
   }
   if (p === '/api/queue' && req.method === 'POST') return readBody(req, body => {
     if (!body || !body.prompt || typeof body.prompt !== 'string') return sendJSON(res, 400, { ok: false, error: 'prompt wajib diisi' });
